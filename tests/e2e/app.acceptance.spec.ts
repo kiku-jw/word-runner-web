@@ -1,0 +1,178 @@
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test } from "@playwright/test";
+
+import {
+  acceptNotice,
+  answerCurrentQuestion,
+  completeRun,
+  expectDownloadedJson,
+  finishReview,
+  gotoApp,
+  openLesson,
+  openParentMetrics,
+  readPilotState,
+} from "./helpers";
+
+test.beforeEach(async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+});
+
+test("shows the privacy-first welcome and avoids third-party traffic or cookies", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    requests.push(request.url());
+  });
+
+  await gotoApp(page);
+
+  await expect(page.getByText("Без акаунта і реклами. Дані лишаються у цьому браузері.")).toBeVisible();
+  expect(await context.cookies()).toEqual([]);
+
+  const allowedOrigin = new URL(baseURL!).origin;
+  for (const url of requests) {
+    const protocol = new URL(url).protocol;
+    if (protocol === "data:" || protocol === "blob:") {
+      continue;
+    }
+    expect(new URL(url).origin).toBe(allowedOrigin);
+  }
+});
+
+test("guides a child from lesson review through ten gates to the result screen", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Тварини");
+  await finishReview(page);
+
+  await expect(page.getByText("1 / 10")).toBeVisible();
+  for (let index = 0; index < 10; index += 1) {
+    await answerCurrentQuestion(page);
+  }
+
+  await expect(page.getByText("10 правильних")).toBeVisible();
+  await expect(page.locator(".practised-words span")).toHaveCount(6);
+  await expect(page.getByRole("button", { name: "Бігти ще раз" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Інший набір" })).toBeVisible();
+});
+
+test("restores an in-progress run after reload without losing local progress", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Їжа й напої");
+  await finishReview(page);
+
+  await answerCurrentQuestion(page);
+  await answerCurrentQuestion(page);
+  const beforeReload = await readPilotState(page);
+
+  await page.reload();
+
+  await expect(page.getByTestId("game-stage")).toBeVisible();
+  await expect(page.getByText("3 / 10")).toBeVisible();
+
+  const afterReload = await readPilotState(page);
+  expect(afterReload.activeLessonId).toBe(beforeReload.activeLessonId);
+  expect(afterReload.activeRun?.currentIndex).toBe(beforeReload.activeRun?.currentIndex);
+  expect(afterReload.eventLog.length).toBeGreaterThanOrEqual(beforeReload.eventLog.length);
+  expect(afterReload.eventLog.some((event) => event.type === "session_resumed")).toBe(true);
+});
+
+test("requires a two-second adult hold before exposing metrics and reset/export actions", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Природа");
+  await finishReview(page);
+  await completeRun(page);
+  await page.getByRole("button", { name: "Інший набір" }).click();
+  await expect(page.getByRole("heading", { name: "Куди біжимо?" })).toBeVisible();
+
+  await page.locator('[data-action="open-parent-gate"]').click();
+  const holdButton = page.locator('[data-action="hold-parent-gate"]');
+  await holdButton.dispatchEvent("pointerdown");
+  await page.waitForTimeout(600);
+  await holdButton.dispatchEvent("pointerup");
+  await expect(page.getByRole("heading", { name: "Розділ для дорослих" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Метрики пілоту" })).toHaveCount(0);
+
+  await openParentMetrics(page);
+
+  await expect(page.getByText("Час подій, вибір воріт, правильність, повтори та оцінка.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Експортувати JSON" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Стерти локальні дані" })).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Експортувати JSON" }).click();
+  const json = await expectDownloadedJson(await downloadPromise);
+  const exported = JSON.parse(json) as {
+    schemaVersion: number;
+    participantId: string;
+    events: Array<{ type: string }>;
+  };
+  expect(exported.schemaVersion).toBe(1);
+  expect(exported.participantId.length).toBeGreaterThan(0);
+  expect(exported.events.some((event) => event.type === "run_completed")).toBe(true);
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Стерти локальні дані" }).click();
+  await expect(page.getByRole("heading", { name: "Словобіг" })).toBeVisible();
+  await expect
+    .poll(async () => page.evaluate(() => window.localStorage.length))
+    .toBe(1);
+  const resetState = await readPilotState(page);
+  expect(resetState.noticeConfirmed).toBe(false);
+  expect(resetState.activeRun).toBeNull();
+  expect(resetState.eventLog).toHaveLength(1);
+  expect(resetState.eventLog[0]?.type).toBe("session_started");
+});
+
+test("keeps an active run playable after the browser goes offline mid-session", async ({
+  page,
+  context,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Транспорт");
+  await finishReview(page);
+
+  await answerCurrentQuestion(page);
+  await context.setOffline(true);
+
+  for (let index = 0; index < 9; index += 1) {
+    await answerCurrentQuestion(page);
+  }
+
+  await expect(page.getByRole("heading", { name: "Забіг завершено" })).toBeVisible();
+  await context.setOffline(false);
+});
+
+test("has no critical axe violations on welcome, gameplay, and parent metrics screens", async ({
+  page,
+}) => {
+  await gotoApp(page);
+
+  const welcomeResults = await new AxeBuilder({ page }).analyze();
+  expect(welcomeResults.violations).toEqual([]);
+
+  await acceptNotice(page);
+  await openParentMetrics(page);
+  const metricsResults = await new AxeBuilder({ page }).analyze();
+  expect(metricsResults.violations).toEqual([]);
+
+  await page.getByRole("button", { name: "Закрити" }).click();
+  await expect(page.getByRole("heading", { name: "Куди біжимо?" })).toBeVisible();
+  await openLesson(page, "Тварини");
+  await finishReview(page);
+
+  const runResults = await new AxeBuilder({ page }).analyze();
+  expect(runResults.violations).toEqual([]);
+});

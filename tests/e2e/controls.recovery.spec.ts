@@ -1,0 +1,254 @@
+import { expect, test } from "@playwright/test";
+
+import {
+  acceptNotice,
+  finishReview,
+  gotoApp,
+  openLesson,
+  readPilotState,
+} from "./helpers";
+
+function oppositeSide(side: "left" | "right"): "left" | "right" {
+  return side === "left" ? "right" : "left";
+}
+
+async function swipeToSide(
+  page: Parameters<typeof test>[0]["page"],
+  side: "left" | "right",
+): Promise<void> {
+  const stage = page.getByTestId("game-stage");
+  const box = await stage.boundingBox();
+  if (!box) {
+    throw new Error("Game stage has no bounding box.");
+  }
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height * 0.7;
+  const endX = startX + (side === "left" ? -90 : 90);
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(endX, startY, { steps: 5 });
+  await page.mouse.up();
+}
+
+async function waitForAdvance(
+  page: Parameters<typeof test>[0]["page"],
+  previousIndex: number,
+): Promise<void> {
+  await expect
+    .poll(async () => {
+      const state = await readPilotState(page);
+      return state.activeRun?.currentIndex ?? -1;
+    })
+    .toBe(previousIndex + 1);
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+});
+
+test("supports tap answers on both left and right gates", async ({ page }) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Тварини");
+  await finishReview(page);
+
+  const seenSides = new Set<string>();
+  while (seenSides.size < 2) {
+    const state = await readPilotState(page);
+    const run = state.activeRun;
+    if (!run) {
+      throw new Error("Active run is missing.");
+    }
+    const currentQuestion = run.questions[run.currentIndex];
+    if (!currentQuestion) {
+      throw new Error("Current question is missing.");
+    }
+
+    seenSides.add(currentQuestion.correctSide);
+    await page.locator(`[data-side="${currentQuestion.correctSide}"]`).click();
+
+    if (run.currentIndex < run.questions.length - 1) {
+      await waitForAdvance(page, run.currentIndex);
+    }
+  }
+
+  expect(seenSides).toEqual(new Set(["left", "right"]));
+});
+
+test("supports horizontal swipe answers on both left and right sides", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Їжа й напої");
+  await finishReview(page);
+
+  const seenSides = new Set<string>();
+  while (seenSides.size < 2) {
+    const state = await readPilotState(page);
+    const run = state.activeRun;
+    if (!run) {
+      throw new Error("Active run is missing.");
+    }
+    const currentQuestion = run.questions[run.currentIndex];
+    if (!currentQuestion) {
+      throw new Error("Current question is missing.");
+    }
+
+    seenSides.add(currentQuestion.correctSide);
+    await swipeToSide(page, currentQuestion.correctSide);
+
+    if (run.currentIndex < run.questions.length - 1) {
+      await waitForAdvance(page, run.currentIndex);
+    }
+  }
+
+  expect(seenSides).toEqual(new Set(["left", "right"]));
+});
+
+test("supports ArrowLeft and ArrowRight answers on both sides", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Транспорт");
+  await finishReview(page);
+
+  const seenSides = new Set<string>();
+  while (seenSides.size < 2) {
+    const state = await readPilotState(page);
+    const run = state.activeRun;
+    if (!run) {
+      throw new Error("Active run is missing.");
+    }
+    const currentQuestion = run.questions[run.currentIndex];
+    if (!currentQuestion) {
+      throw new Error("Current question is missing.");
+    }
+
+    seenSides.add(currentQuestion.correctSide);
+    await page.keyboard.press(
+      currentQuestion.correctSide === "left" ? "ArrowLeft" : "ArrowRight",
+    );
+
+    if (run.currentIndex < run.questions.length - 1) {
+      await waitForAdvance(page, run.currentIndex);
+    }
+  }
+
+  expect(seenSides).toEqual(new Set(["left", "right"]));
+});
+
+test("locks input after the first answer and ignores a second control before feedback ends", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Природа");
+  await finishReview(page);
+
+  const before = await readPilotState(page);
+  const run = before.activeRun;
+  if (!run) {
+    throw new Error("Active run is missing.");
+  }
+  const currentQuestion = run.questions[run.currentIndex];
+  if (!currentQuestion) {
+    throw new Error("Current question is missing.");
+  }
+
+  const firstSide = currentQuestion.correctSide;
+  const secondSide = oppositeSide(firstSide);
+  const answerEventsBefore = before.eventLog.filter(
+    (event) => event.type === "answer_selected",
+  ).length;
+
+  await page.locator(`[data-side="${firstSide}"]`).click();
+  await expect(page.locator(`[data-side="${secondSide}"]`)).toBeDisabled();
+  await page.keyboard.press(secondSide === "left" ? "ArrowLeft" : "ArrowRight");
+
+  await waitForAdvance(page, run.currentIndex);
+
+  const after = await readPilotState(page);
+  const answerEventsAfter = after.eventLog.filter(
+    (event) => event.type === "answer_selected",
+  );
+  expect(answerEventsAfter).toHaveLength(answerEventsBefore + 1);
+  expect(run.questions[run.currentIndex]?.selectedSide).toBeNull();
+  const answeredQuestion = after.activeRun?.questions[run.currentIndex];
+  expect(answeredQuestion?.selectedSide).toBe(firstSide);
+  expect(answerEventsAfter.at(-1)?.type).toBe("answer_selected");
+});
+
+test("continues to the next question after reload during feedback", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Тварини");
+  await finishReview(page);
+
+  const before = await readPilotState(page);
+  const run = before.activeRun;
+  if (!run) {
+    throw new Error("Active run is missing.");
+  }
+  const currentQuestion = run.questions[run.currentIndex];
+  if (!currentQuestion) {
+    throw new Error("Current question is missing.");
+  }
+
+  await page.locator(`[data-side="${currentQuestion.correctSide}"]`).click();
+  await page.reload();
+
+  await expect(page.getByTestId("game-stage")).toBeVisible();
+  await expect(page.getByText("2 / 10")).toBeVisible();
+
+  const after = await readPilotState(page);
+  expect(after.activeRun?.currentIndex).toBe(1);
+  expect(after.activeRun?.questions[0]?.selectedSide).toBe(currentQuestion.correctSide);
+});
+
+test("finishes the run after reload during final-question feedback", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Транспорт");
+  await finishReview(page);
+
+  for (let index = 0; index < 9; index += 1) {
+    const state = await readPilotState(page);
+    const run = state.activeRun;
+    if (!run) {
+      throw new Error("Active run is missing.");
+    }
+    const currentQuestion = run.questions[run.currentIndex];
+    if (!currentQuestion) {
+      throw new Error("Current question is missing.");
+    }
+    await page.locator(`[data-side="${currentQuestion.correctSide}"]`).click();
+    await waitForAdvance(page, run.currentIndex);
+  }
+
+  const beforeFinal = await readPilotState(page);
+  const finalRun = beforeFinal.activeRun;
+  if (!finalRun) {
+    throw new Error("Final run is missing.");
+  }
+  const finalQuestion = finalRun.questions[finalRun.currentIndex];
+  if (!finalQuestion) {
+    throw new Error("Final question is missing.");
+  }
+
+  await page.locator(`[data-side="${finalQuestion.correctSide}"]`).click();
+  await page.reload();
+
+  await expect(page.getByRole("heading", { name: "Забіг завершено" })).toBeVisible();
+  const after = await readPilotState(page);
+  expect(after.activeRun?.status).toBe("complete");
+  expect(
+    after.eventLog.some((event) => event.type === "run_completed"),
+  ).toBe(true);
+});
