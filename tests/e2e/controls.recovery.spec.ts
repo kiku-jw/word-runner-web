@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   acceptNotice,
@@ -12,10 +12,7 @@ function oppositeSide(side: "left" | "right"): "left" | "right" {
   return side === "left" ? "right" : "left";
 }
 
-async function swipeToSide(
-  page: Parameters<typeof test>[0]["page"],
-  side: "left" | "right",
-): Promise<void> {
+async function swipeToSide(page: Page, side: "left" | "right"): Promise<void> {
   const stage = page.getByTestId("game-stage");
   const box = await stage.boundingBox();
   if (!box) {
@@ -31,10 +28,7 @@ async function swipeToSide(
   await page.mouse.up();
 }
 
-async function waitForAdvance(
-  page: Parameters<typeof test>[0]["page"],
-  previousIndex: number,
-): Promise<void> {
+async function waitForAdvance(page: Page, previousIndex: number): Promise<void> {
   await expect
     .poll(async () => {
       const state = await readPilotState(page);
@@ -181,6 +175,43 @@ test("locks input after the first answer and ignores a second control before fee
   expect(answerEventsAfter.at(-1)?.type).toBe("answer_selected");
 });
 
+test("ignores vertical drags without changing progress or recording an answer", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Природа");
+  await finishReview(page);
+
+  const before = await readPilotState(page);
+  const beforeAnswers = before.eventLog.filter(
+    (event) => event.type === "answer_selected",
+  ).length;
+  const stage = page.getByTestId("game-stage");
+  const box = await stage.boundingBox();
+  if (!box) {
+    throw new Error("Game stage has no bounding box.");
+  }
+
+  const x = box.x + box.width / 2;
+  const startY = box.y + box.height * 0.7;
+  const endY = startY - 110;
+
+  await page.mouse.move(x, startY);
+  await page.mouse.down();
+  await page.mouse.move(x + 4, endY, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+
+  const after = await readPilotState(page);
+  const afterAnswers = after.eventLog.filter(
+    (event) => event.type === "answer_selected",
+  ).length;
+  expect(after.activeRun?.currentIndex).toBe(before.activeRun?.currentIndex);
+  expect(afterAnswers).toBe(beforeAnswers);
+  expect(page.getByText("1 / 10")).toBeVisible();
+});
+
 test("continues to the next question after reload during feedback", async ({
   page,
 }) => {
@@ -251,4 +282,84 @@ test("finishes the run after reload during final-question feedback", async ({
   expect(
     after.eventLog.some((event) => event.type === "run_completed"),
   ).toBe(true);
+});
+
+test("prioritizes a last-two mistake in the next non-replay run", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Їжа й напої");
+  await finishReview(page);
+
+  for (let index = 0; index < 8; index += 1) {
+    const state = await readPilotState(page);
+    const run = state.activeRun;
+    if (!run) {
+      throw new Error("Active run is missing.");
+    }
+    const currentQuestion = run.questions[run.currentIndex];
+    if (!currentQuestion) {
+      throw new Error("Current question is missing.");
+    }
+    await page.locator(`[data-side="${currentQuestion.correctSide}"]`).click();
+    await waitForAdvance(page, run.currentIndex);
+  }
+
+  const beforeMistake = await readPilotState(page);
+  const run = beforeMistake.activeRun;
+  if (!run) {
+    throw new Error("Active run is missing.");
+  }
+  const mistakeQuestion = run.questions[run.currentIndex];
+  if (!mistakeQuestion) {
+    throw new Error("Mistake question is missing.");
+  }
+
+  await page
+    .locator(`[data-side="${oppositeSide(mistakeQuestion.correctSide)}"]`)
+    .click();
+  await waitForAdvance(page, run.currentIndex);
+
+  const lastQuestionState = await readPilotState(page);
+  const lastRun = lastQuestionState.activeRun;
+  if (!lastRun) {
+    throw new Error("Last run is missing.");
+  }
+  const lastQuestion = lastRun.questions[lastRun.currentIndex];
+  if (!lastQuestion) {
+    throw new Error("Last question is missing.");
+  }
+
+  await page.locator(`[data-side="${lastQuestion.correctSide}"]`).click();
+  await expect(page.getByRole("heading", { name: "Забіг завершено" })).toBeVisible();
+  await page.getByRole("button", { name: "Інший набір" }).click();
+  await openLesson(page, "Їжа й напої");
+  await finishReview(page);
+
+  const nextRun = await readPilotState(page);
+  expect(nextRun.activeRun?.questions[6]?.conceptId).toBe(mistakeQuestion.conceptId);
+});
+
+test("shows degraded audio copy without dead buttons when speech synthesis is unavailable", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "speechSynthesis", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(window, "SpeechSynthesisUtterance", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
+  await gotoApp(page);
+  await acceptNotice(page);
+  await expect(page.getByText("Без озвучення")).toBeVisible();
+  await expect(page.locator('[data-action="toggle-sound"]')).toHaveCount(0);
+  await openLesson(page, "Тварини");
+  await expect(page.getByText("Озвучення недоступне")).toBeVisible();
+  await expect(page.locator('[data-action="speak-current"]')).toHaveCount(0);
 });

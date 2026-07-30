@@ -6,6 +6,7 @@ type StoredRunState = {
   currentIndex: number;
   status: "active" | "complete";
   questions: Array<{
+    conceptId?: string;
     correctSide: "left" | "right";
     selectedSide?: "left" | "right" | null;
   }>;

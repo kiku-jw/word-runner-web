@@ -10,6 +10,8 @@ engine, browser speech synthesis when available, and fully local metrics.
 and local telemetry. It does not prove learning efficacy, retention, payment
 intent, or native-app viability.
 
+![Word Runner gameplay on a 360 by 640 viewport](docs/images/gameplay-mobile.png)
+
 ## What it does
 
 - Ukrainian child-facing UI with a two-gate runner loop.

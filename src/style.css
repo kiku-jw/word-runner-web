@@ -190,6 +190,16 @@ button:active:not(:disabled) {
   justify-self: end;
 }
 
+.audio-status {
+  justify-self: end;
+  max-width: 10ch;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: right;
+}
+
 .welcome-layout {
   position: relative;
   z-index: 3;
@@ -268,6 +278,13 @@ button:active:not(:disabled) {
     transform 160ms ease,
     filter 160ms ease,
     background 160ms ease;
+}
+
+.audio-unavailable {
+  margin: 18px 0 0;
+  color: #31516e;
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .primary-button {
@@ -1072,7 +1089,8 @@ tbody th {
   }
 
   .source-word,
-  .feedback-card div > span:last-child {
+  .feedback-card div > span:last-child,
+  .audio-unavailable {
     color: var(--sky-300);
   }
 

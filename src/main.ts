@@ -47,6 +47,9 @@ if (!appRoot) {
   throw new Error("App root is missing.");
 }
 const root: HTMLElement = appRoot;
+const canSpeak =
+  typeof window.speechSynthesis !== "undefined" &&
+  typeof window.SpeechSynthesisUtterance === "function";
 
 const contentErrors = validateContentPack(CONTENT_PACK);
 const loaded = loadState();
@@ -178,14 +181,20 @@ function topBar(options: {
           ? `<span class="progress-count" aria-label="Прогрес">${escapeHtml(options.progress)}</span>`
           : `<span class="top-label">${escapeHtml(options.label ?? "")}</span>`
       }
-      <button
-        class="icon-button sound-button"
-        type="button"
-        data-action="toggle-sound"
-        aria-pressed="${String(state.soundEnabled)}"
-      >
-        ${state.soundEnabled ? "Звук: так" : "Звук: ні"}
-      </button>
+      ${
+        canSpeak
+          ? `
+            <button
+              class="icon-button sound-button"
+              type="button"
+              data-action="toggle-sound"
+              aria-pressed="${String(state.soundEnabled)}"
+            >
+              ${state.soundEnabled ? "Звук: так" : "Звук: ні"}
+            </button>
+          `
+          : `<span class="audio-status">Без озвучення</span>`
+      }
     </header>
   `;
 }
@@ -320,9 +329,15 @@ function renderReview(): string {
           </span>
           <span class="source-word" id="review-source">${escapeHtml(concept.source.uk)}</span>
           <strong class="target-word">${escapeHtml(concept.target.en)}</strong>
-          <button class="speak-button" type="button" data-action="speak-current">
-            Прослухати слово
-          </button>
+          ${
+            canSpeak
+              ? `
+                <button class="speak-button" type="button" data-action="speak-current">
+                  Прослухати слово
+                </button>
+              `
+              : `<p class="audio-unavailable">Озвучення недоступне</p>`
+          }
         </div>
         <div class="review-controls">
           <button
@@ -715,7 +730,7 @@ function speak(concept: Concept | null): void {
   if (
     concept === null ||
     !state.soundEnabled ||
-    !("speechSynthesis" in window)
+    !canSpeak
   ) {
     return;
   }
@@ -728,7 +743,7 @@ function speak(concept: Concept | null): void {
 }
 
 function toggleSound(): void {
-  if ("speechSynthesis" in window) {
+  if (canSpeak) {
     window.speechSynthesis.cancel();
   }
   updateState({ ...state, soundEnabled: !state.soundEnabled });
@@ -748,7 +763,13 @@ function openLesson(lessonId: string): void {
 
 function startRun(isReplay = false): void {
   const lesson = activeLesson();
-  const priority = isReplay ? (state.activeRun?.priorityNextRun ?? []) : [];
+  const progressPriority = lesson.conceptIds.filter(
+    (conceptId) => state.conceptProgress[conceptId]?.prioritizeNextRun,
+  );
+  const runPriority = isReplay
+    ? (state.activeRun?.priorityNextRun ?? [])
+    : [];
+  const priority = [...new Set([...runPriority, ...progressPriority])];
   const run = createRun(CONTENT_PACK, lesson.id, runSeed(), priority);
   if (isReplay) {
     appendEvent("replay_started", { runId: run.id, lessonId: lesson.id });
@@ -1047,6 +1068,9 @@ function bindInteractions(): void {
         answer(deltaX < 0 ? "left" : "right");
         return;
       }
+      if (Math.abs(deltaX) > 12 || Math.abs(deltaY) > 12) {
+        return;
+      }
       const bounds = stage.getBoundingClientRect();
       answer(event.clientX < bounds.left + bounds.width / 2 ? "left" : "right");
     });
@@ -1071,7 +1095,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("beforeunload", () => {
-  if ("speechSynthesis" in window) {
+  if (canSpeak) {
     window.speechSynthesis.cancel();
   }
 });
