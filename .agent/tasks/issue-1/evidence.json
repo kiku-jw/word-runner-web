@@ -1,0 +1,97 @@
+{
+  "issue": 1,
+  "repository": {
+    "nameWithOwner": "kiku-jw/word-runner-web",
+    "url": "https://github.com/kiku-jw/word-runner-web",
+    "pagesUrl": "https://kiku-jw.github.io/word-runner-web/",
+    "prototypeReleaseCommit": "9a1271baa658710b68a3e2b6b087ab04004504b0",
+    "priorBuildCommit": "67438202f6467d716c5a65e11e97825afe979b21",
+    "publicationDate": "2026-07-31"
+  },
+  "deployment": {
+    "runId": 30591713510,
+    "runUrl": "https://github.com/kiku-jw/word-runner-web/actions/runs/30591713510",
+    "attempt": 2,
+    "status": "completed",
+    "conclusion": "success",
+    "buildJobId": 91036279777,
+    "buildJobConclusion": "success",
+    "deployJobId": 91037200077,
+    "deployJobConclusion": "success",
+    "liveHttpStatus": 200,
+    "liveTitleVerified": true,
+    "liveAssetHashesMatch": true,
+    "liveConsoleErrors": 0,
+    "liveThirdPartyRequestsObserved": 0
+  },
+  "verification": {
+    "localCommands": [
+      "npm ci && npm run qa"
+    ],
+    "localResults": {
+      "cleanInstallPackages": 62,
+      "auditVulnerabilities": 0,
+      "check": "passed",
+      "vitestFiles": 4,
+      "vitestTests": 20,
+      "playwright": "passed",
+      "playwrightTests": 64
+    },
+    "deploymentCommands": [
+      "gh run view 30591713510 --repo kiku-jw/word-runner-web --json attempt,status,conclusion,jobs,url,updatedAt",
+      "curl -I -L --max-time 20 https://kiku-jw.github.io/word-runner-web/",
+      "curl -sL https://kiku-jw.github.io/word-runner-web/ | rg -n \"<title>|Словобіг\" -n -S",
+      "compare SHA-256 for local and live JavaScript and CSS artifacts"
+    ]
+  },
+  "lighthouse": {
+    "local": {
+      "source": ".agent/tasks/issue-1/raw/lighthouse-local.json",
+      "scores": {
+        "performance": 100,
+        "accessibility": 100,
+        "bestPractices": 100,
+        "seo": 100
+      },
+      "metrics": {
+        "fcpMs": 901.4121,
+        "lcpMs": 901.4121,
+        "speedIndexMs": 1598.7254699908458,
+        "tbtMs": 0,
+        "cls": 0,
+        "ttiMs": 901.4121
+      }
+    },
+    "live": {
+      "source": ".agent/tasks/issue-1/raw/lighthouse-live.json",
+      "scores": {
+        "performance": 100,
+        "accessibility": 100,
+        "bestPractices": 100,
+        "seo": 100
+      },
+      "metrics": {
+        "fcpMs": 1025.9955,
+        "lcpMs": 1475.9955,
+        "speedIndexMs": 2774.7385979966925,
+        "tbtMs": 0,
+        "cls": 0,
+        "ttiMs": 1520.9955000000002
+      }
+    }
+  },
+  "screenshots": [
+    ".agent/tasks/issue-1/raw/welcome-390.png",
+    ".agent/tasks/issue-1/raw/gameplay-360x640.png",
+    ".agent/tasks/issue-1/raw/run-390.png",
+    ".agent/tasks/issue-1/raw/welcome-1280.png",
+    ".agent/tasks/issue-1/raw/gameplay-desktop-1280x800.png",
+    "docs/images/gameplay-mobile.png"
+  ],
+  "boundaries": [
+    "No account, backend, ads, cookies, or remote analytics",
+    "Parent metrics stay browser-local and export only on explicit adult action",
+    "Ukrainian source to English target only in the current public build",
+    "Prototype-reviewed content still requires human bilingual review before broader child pilot"
+  ]
+}
