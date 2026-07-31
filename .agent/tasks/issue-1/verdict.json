@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "issue": 1,
+  "status": "pass",
+  "implementationCommit": "9a1271baa658710b68a3e2b6b087ab04004504b0",
+  "verification": {
+    "cleanInstallQa": "passed",
+    "vitestTests": 20,
+    "playwrightTests": 64,
+    "successfulDeploymentRun": 30591713510,
+    "liveHttpStatus": 200,
+    "lighthouseLocal": "100/100/100/100",
+    "lighthouseLive": "100/100/100/100"
+  },
+  "adversarialFindings": {
+    "verticalDragFallsThroughAsTap": "resolved_and_tested",
+    "lastTwoMistakeLostOutsideReplay": "resolved_and_tested",
+    "unsupportedSpeechLeavesDeadControls": "resolved_and_tested",
+    "deploymentMissingLiveSmoke": "resolved_and_verified"
+  },
+  "residualRisks": [
+    "Human bilingual review is required before a supervised child pilot",
+    "Local engagement metrics do not establish learning efficacy or market demand"
+  ]
+}
