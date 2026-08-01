@@ -27,7 +27,82 @@ type StoredPilotState = {
   }>;
 };
 
-export async function gotoApp(page: Page): Promise<void> {
+export async function gotoApp(
+  page: Page,
+  options: { speechAlreadyMocked?: boolean } = {},
+): Promise<void> {
+  if (!options.speechAlreadyMocked) {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, "speechSynthesis", {
+        configurable: true,
+        value: {
+          cancel: () => undefined,
+          getVoices: () => [],
+          speak: () => undefined,
+        },
+      });
+    });
+  }
+  await page.addInitScript(() => {
+    let mistakeToneStarts = 0;
+    class SilentAudioParam {
+      setValueAtTime(): this {
+        return this;
+      }
+
+      exponentialRampToValueAtTime(): this {
+        return this;
+      }
+    }
+    class SilentAudioNode {
+      connect(): void {}
+      disconnect(): void {}
+    }
+    class SilentOscillator extends SilentAudioNode {
+      type: OscillatorType = "sine";
+      frequency = new SilentAudioParam();
+      private onEnded: (() => void) | null = null;
+
+      start(): void {
+        mistakeToneStarts += 1;
+      }
+      stop(): void {
+        window.queueMicrotask(() => this.onEnded?.());
+      }
+      addEventListener(type: string, listener: EventListener): void {
+        if (type === "ended") {
+          this.onEnded = () => listener(new Event("ended"));
+        }
+      }
+    }
+    class SilentGain extends SilentAudioNode {
+      gain = new SilentAudioParam();
+    }
+    class SilentAudioContext {
+      currentTime = 0;
+      destination = new SilentAudioNode();
+      state = "running";
+
+      createOscillator(): SilentOscillator {
+        return new SilentOscillator();
+      }
+      createGain(): SilentGain {
+        return new SilentGain();
+      }
+      resume(): Promise<void> {
+        return Promise.resolve();
+      }
+    }
+
+    Object.defineProperty(window, "AudioContext", {
+      configurable: true,
+      value: SilentAudioContext,
+    });
+    Object.defineProperty(window, "__mistakeToneStarts", {
+      configurable: true,
+      get: () => mistakeToneStarts,
+    });
+  });
   await page.goto("./");
   await expect
     .poll(() => page.evaluate(() => window.location.pathname))

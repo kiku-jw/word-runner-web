@@ -677,17 +677,40 @@ export function createRunnerScene(
     runner.rightArm.rotation.x = -stride;
     runner.leftLeg.rotation.x = -stride * 0.78;
     runner.rightLeg.rotation.x = stride * 0.78;
-    runner.group.position.y = 0.04 + (reducedMotion ? 0 : Math.abs(Math.sin(elapsed * 13.5)) * 0.06);
+    runner.leftArm.rotation.z = -0.12;
+    runner.rightArm.rotation.z = 0.12;
+    runner.group.rotation.z = 0;
+
+    if (selectedSide !== null && result !== null) {
+      pulseAge += delta;
+    }
+    const reactionProgress = Math.min(1, pulseAge / 0.72);
+    const reactionWave = reducedMotion ? 0 : Math.sin(reactionProgress * Math.PI);
+    let reactionY = 0;
+    if (result === "correct" && reactionProgress < 1) {
+      reactionY = reactionWave * 0.34;
+      runner.leftArm.rotation.z -= reactionWave * 1.6;
+      runner.rightArm.rotation.z += reactionWave * 1.6;
+    } else if (result === "incorrect" && reactionProgress < 1) {
+      reactionY = -reactionWave * 0.08;
+      runner.group.rotation.z =
+        Math.sin(reactionProgress * Math.PI * 3) * (1 - reactionProgress) * 0.2;
+      runner.leftArm.rotation.z -= reactionWave * 0.48;
+      runner.rightArm.rotation.z += reactionWave * 0.32;
+    }
+    runner.group.position.y =
+      0.04 +
+      (reducedMotion ? 0 : Math.abs(Math.sin(elapsed * 13.5)) * 0.06) +
+      reactionY;
 
     const wrongShake = result === "incorrect" && selectedSide !== null && !reducedMotion
-      ? Math.sin(elapsed * 58) * Math.max(0, 0.13 - pulseAge * 0.1)
+      ? Math.sin(elapsed * 58) * Math.max(0, 1 - pulseAge / 0.55) * 0.13
       : 0;
     camera.position.x = runner.group.position.x * 0.08 + wrongShake;
     camera.position.y = 6.15 + (reducedMotion ? 0 : Math.sin(elapsed * 3.2) * 0.035);
     camera.lookAt(runner.group.position.x * 0.15, 1.45, -13.5);
 
     if (pulse.visible) {
-      pulseAge += delta;
       const progress = Math.min(1, pulseAge / 0.62);
       pulse.scale.setScalar(0.65 + progress * 2.4);
       pulse.material.opacity = (1 - progress) * 0.82;

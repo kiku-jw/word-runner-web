@@ -377,7 +377,7 @@ test("shows degraded audio copy without dead buttons when speech synthesis is un
     });
   });
 
-  await gotoApp(page);
+  await gotoApp(page, { speechAlreadyMocked: true });
   await acceptNotice(page);
   await expect(page.getByText("Без озвучення")).toBeVisible();
   await expect(page.locator('[data-action="toggle-sound"]')).toHaveCount(0);
@@ -386,12 +386,13 @@ test("shows degraded audio copy without dead buttons when speech synthesis is un
   await expect(page.locator('[data-action="speak-current"]')).toHaveCount(0);
 });
 
-test("selects a natural local Apple voice for pronunciation", async ({ page }) => {
+test("uses a natural Apple voice and adds a gentle mistake reaction", async ({ page }) => {
   await page.addInitScript(() => {
     type SpokenSample = {
       lang: string;
       pitch: number;
       rate: number;
+      text: string;
       voiceName: string | null;
     };
     const spoken: SpokenSample[] = [];
@@ -416,6 +417,8 @@ test("selects a natural local Apple voice for pronunciation", async ({ page }) =
       pitch = 1;
       rate = 1;
       voice: SpeechSynthesisVoice | null = null;
+
+      constructor(readonly text = "") {}
     }
     Object.defineProperty(window, "SpeechSynthesisUtterance", {
       configurable: true,
@@ -431,6 +434,7 @@ test("selects a natural local Apple voice for pronunciation", async ({ page }) =
             lang: utterance.lang,
             pitch: utterance.pitch,
             rate: utterance.rate,
+            text: utterance.text,
             voiceName: utterance.voice?.name ?? null,
           });
         },
@@ -442,9 +446,10 @@ test("selects a natural local Apple voice for pronunciation", async ({ page }) =
     });
   });
 
-  await gotoApp(page);
+  await gotoApp(page, { speechAlreadyMocked: true });
   await acceptNotice(page);
   await openLesson(page, "Тварини");
+  const reviewWord = (await page.locator(".target-word").innerText()).trim();
   await page.locator('[data-action="speak-current"]').click();
 
   const sample = await page.evaluate(() =>
@@ -454,6 +459,7 @@ test("selects a natural local Apple voice for pronunciation", async ({ page }) =
           lang: string;
           pitch: number;
           rate: number;
+          text: string;
           voiceName: string | null;
         }>;
       }
@@ -463,7 +469,93 @@ test("selects a natural local Apple voice for pronunciation", async ({ page }) =
     lang: "en-US",
     pitch: 1,
     rate: 0.9,
+    text: reviewWord,
     voiceName: "Samantha",
+  });
+
+  await finishReview(page);
+  const runState = await readPilotState(page);
+  const question = runState.activeRun?.questions[0];
+  if (!question) {
+    throw new Error("Run question is missing.");
+  }
+  const wrongSide = question.correctSide === "left" ? "right" : "left";
+  const correctWord = (
+    await page.locator(`[data-side="${question.correctSide}"]`).innerText()
+  ).trim();
+  const spokenBeforeMistake = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __spokenSamples: Array<unknown>;
+        }
+      ).__spokenSamples.length,
+  );
+  await page.locator(`[data-side="${wrongSide}"]`).click();
+
+  await expect(page.locator(".feedback-reaction")).toHaveText("О-о!");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as typeof window & {
+              __mistakeToneStarts: number;
+            }
+          ).__mistakeToneStarts,
+      ),
+    )
+    .toBe(1);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as typeof window & {
+              __spokenSamples: Array<unknown>;
+            }
+          ).__spokenSamples.length,
+      ),
+    )
+    .toBe(spokenBeforeMistake + 1);
+  const correctionSamples = await page.evaluate(() =>
+    (
+      window as typeof window & {
+        __spokenSamples: Array<{ text: string; voiceName: string | null }>;
+      }
+    ).__spokenSamples
+      .slice(-1)
+      .map(({ text, voiceName }) => ({ text, voiceName })),
+  );
+  expect(correctionSamples).toEqual([
+    { text: correctWord, voiceName: "Samantha" },
+  ]);
+
+  await waitForAdvance(page, 0);
+  const nextState = await readPilotState(page);
+  const nextQuestion = nextState.activeRun?.questions[1];
+  if (!nextQuestion) {
+    throw new Error("Second run question is missing.");
+  }
+  await page.locator(`[data-side="${nextQuestion.correctSide}"]`).click();
+  await expect(page.locator(".feedback-reaction")).toHaveText("Так!");
+  const correctAnswerAudio = await page.evaluate(() => ({
+    spoken:
+      (
+        window as typeof window & {
+          __spokenSamples: Array<unknown>;
+        }
+      ).__spokenSamples.length,
+    tones:
+      (
+        window as typeof window & {
+          __mistakeToneStarts: number;
+        }
+      ).__mistakeToneStarts,
+  }));
+  expect(correctAnswerAudio).toEqual({
+    spoken: spokenBeforeMistake + 2,
+    tones: 1,
   });
 });
 

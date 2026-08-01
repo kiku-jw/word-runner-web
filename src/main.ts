@@ -93,6 +93,7 @@ let pointerStart: { x: number; y: number } | null = null;
 let lastShownQuestionId: string | null = null;
 let runnerScene: RunnerSceneController | null = null;
 let webglFailed = false;
+let mistakeAudioContext: AudioContext | null = null;
 
 declare global {
   interface Window {
@@ -434,6 +435,9 @@ function renderFeedback(): string {
   return `
     <div class="feedback-layer" role="status" aria-live="assertive">
       <div class="feedback-card ${feedback.correct ? "feedback-correct" : "feedback-correction"}">
+        <span class="feedback-reaction" aria-hidden="true">
+          ${feedback.correct ? "Так!" : "О-о!"}
+        </span>
         <span class="feedback-glyph" aria-hidden="true">${concept.glyph}</span>
         <div>
           <span class="feedback-label">${feedback.correct ? "Правильно" : "Запам’ятай"}</span>
@@ -859,6 +863,62 @@ function speak(concept: Concept | null): void {
   window.speechSynthesis.speak(utterance);
 }
 
+function playMistakeSound(onEnded: () => void): void {
+  if (typeof window.AudioContext !== "function") {
+    onEnded();
+    return;
+  }
+  try {
+    if (mistakeAudioContext === null || mistakeAudioContext.state === "closed") {
+      mistakeAudioContext = new AudioContext();
+    }
+    const context = mistakeAudioContext;
+    const startedAt = context.currentTime + 0.01;
+    const tone = context.createOscillator();
+    const volume = context.createGain();
+    tone.type = "sine";
+    tone.frequency.setValueAtTime(392, startedAt);
+    tone.frequency.setValueAtTime(294, startedAt + 0.145);
+    volume.gain.setValueAtTime(0.0001, startedAt);
+    volume.gain.exponentialRampToValueAtTime(0.13, startedAt + 0.018);
+    volume.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.12);
+    volume.gain.setValueAtTime(0.0001, startedAt + 0.145);
+    volume.gain.exponentialRampToValueAtTime(0.11, startedAt + 0.165);
+    volume.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.32);
+    tone.connect(volume);
+    volume.connect(context.destination);
+    let finished = false;
+    const finish = (): void => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      tone.disconnect();
+      volume.disconnect();
+      onEnded();
+    };
+    tone.addEventListener(
+      "ended",
+      finish,
+      { once: true },
+    );
+    void context.resume().catch(finish);
+    tone.start(startedAt);
+    tone.stop(startedAt + 0.34);
+  } catch {
+    onEnded();
+  }
+}
+
+function playAnswerAudio(concept: Concept, correct: boolean): void {
+  if (!state.soundEnabled || !canSpeak || correct) {
+    speak(concept);
+    return;
+  }
+  window.speechSynthesis.cancel();
+  playMistakeSound(() => speak(concept));
+}
+
 function toggleSound(): void {
   if (canSpeak) {
     window.speechSynthesis.cancel();
@@ -969,7 +1029,10 @@ function answer(side: Side, inputMethod: InputMethod): void {
     },
   );
   persist();
-  speak(conceptById(CONTENT_PACK, question.conceptId));
+  playAnswerAudio(
+    conceptById(CONTENT_PACK, question.conceptId),
+    result.correct,
+  );
   render();
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
