@@ -386,6 +386,87 @@ test("shows degraded audio copy without dead buttons when speech synthesis is un
   await expect(page.locator('[data-action="speak-current"]')).toHaveCount(0);
 });
 
+test("selects a natural local Apple voice for pronunciation", async ({ page }) => {
+  await page.addInitScript(() => {
+    type SpokenSample = {
+      lang: string;
+      pitch: number;
+      rate: number;
+      voiceName: string | null;
+    };
+    const spoken: SpokenSample[] = [];
+    const voices = [
+      {
+        default: true,
+        lang: "en-US",
+        localService: true,
+        name: "Ralph",
+        voiceURI: "Ralph",
+      },
+      {
+        default: false,
+        lang: "en-US",
+        localService: true,
+        name: "Samantha",
+        voiceURI: "com.apple.speech.synthesis.voice.samantha",
+      },
+    ] as SpeechSynthesisVoice[];
+    class MockUtterance {
+      lang = "";
+      pitch = 1;
+      rate = 1;
+      voice: SpeechSynthesisVoice | null = null;
+    }
+    Object.defineProperty(window, "SpeechSynthesisUtterance", {
+      configurable: true,
+      value: MockUtterance,
+    });
+    Object.defineProperty(window, "speechSynthesis", {
+      configurable: true,
+      value: {
+        cancel: () => undefined,
+        getVoices: () => voices,
+        speak: (utterance: MockUtterance) => {
+          spoken.push({
+            lang: utterance.lang,
+            pitch: utterance.pitch,
+            rate: utterance.rate,
+            voiceName: utterance.voice?.name ?? null,
+          });
+        },
+      },
+    });
+    Object.defineProperty(window, "__spokenSamples", {
+      configurable: true,
+      value: spoken,
+    });
+  });
+
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Тварини");
+  await page.locator('[data-action="speak-current"]').click();
+
+  const sample = await page.evaluate(() =>
+    (
+      window as typeof window & {
+        __spokenSamples: Array<{
+          lang: string;
+          pitch: number;
+          rate: number;
+          voiceName: string | null;
+        }>;
+      }
+    ).__spokenSamples.at(-1),
+  );
+  expect(sample).toEqual({
+    lang: "en-US",
+    pitch: 1,
+    rate: 0.9,
+    voiceName: "Samantha",
+  });
+});
+
 test("keeps the existing 2D controls usable when WebGL2 is unavailable", async ({
   page,
 }) => {

@@ -25,7 +25,10 @@ engineering evidence, not a promise for every pilot device.
 
 The current content pack contains four lessons and 24 prototype-reviewed
 concepts. Concept cards use emoji glyphs, not a per-concept image bundle, and
-pronunciation uses browser speech synthesis when available. The generated
+pronunciation uses browser speech synthesis when available. Voice selection
+prefers local English voices, then enhanced Apple voices such as Ava or
+Samantha, with system Google and Microsoft voices as fallbacks. It does not
+download audio or call a TTS service from application code. The generated
 background and runner assets are documented in `public/assets/ASSETS.md`.
 
 ## Metrics boundary

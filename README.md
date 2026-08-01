@@ -88,7 +88,8 @@ Each concept uses:
 - a Ukrainian source word;
 - an English target word;
 - an emoji glyph for the concept card and feedback layer;
-- browser speech synthesis for pronunciation when the browser supports it;
+- browser speech synthesis for pronunciation when the browser supports it,
+  preferring high-quality local Apple, Google, or Microsoft English voices;
 - lesson-scoped distractor IDs.
 
 The content is prototype-reviewed, not final educational copy. If a future pack

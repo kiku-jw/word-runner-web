@@ -25,6 +25,7 @@ import {
   type RunnerSceneController,
   type RunnerSceneSnapshot,
 } from "./scene3d";
+import { selectPreferredEnglishVoice } from "./speech";
 import type {
   Concept,
   InputMethod,
@@ -845,10 +846,16 @@ function speak(concept: Concept | null): void {
     return;
   }
   window.speechSynthesis.cancel();
+  const preferredEnglishVoice = selectPreferredEnglishVoice(
+    window.speechSynthesis.getVoices(),
+  );
   const utterance = new SpeechSynthesisUtterance(concept.target.en);
-  utterance.lang = "en-US";
-  utterance.rate = 0.82;
-  utterance.pitch = 1.03;
+  if (preferredEnglishVoice) {
+    utterance.voice = preferredEnglishVoice;
+  }
+  utterance.lang = preferredEnglishVoice?.lang ?? "en-US";
+  utterance.rate = 0.9;
+  utterance.pitch = 1;
   window.speechSynthesis.speak(utterance);
 }
 
