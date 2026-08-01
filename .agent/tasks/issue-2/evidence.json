@@ -1,0 +1,67 @@
+{
+  "issue": 2,
+  "repository": {
+    "nameWithOwner": "kiku-jw/word-runner-web",
+    "url": "https://github.com/kiku-jw/word-runner-web",
+    "pagesUrl": "https://kiku-jw.github.io/word-runner-web/",
+    "releaseCommit": "4f538b1c9bdd17eb3cf19e76767251119b27bebb",
+    "publicationDate": "2026-08-01"
+  },
+  "deployment": {
+    "runId": 30692513380,
+    "runUrl": "https://github.com/kiku-jw/word-runner-web/actions/runs/30692513380",
+    "status": "completed",
+    "conclusion": "success",
+    "buildJobId": 91349655432,
+    "buildJobConclusion": "success",
+    "deployJobId": 91350901066,
+    "deployJobConclusion": "success",
+    "liveHttpStatus": 200,
+    "liveAssetHashesMatch": true,
+    "liveConsoleErrors": 0,
+    "liveConsoleWarnings": 0,
+    "liveCookies": 0,
+    "liveThirdPartyRequestsObserved": 0
+  },
+  "verification": {
+    "command": "npm ci && npm run qa && npm audit --audit-level=moderate",
+    "cleanInstallPackagesAdded": 70,
+    "auditedPackages": 71,
+    "auditVulnerabilities": 0,
+    "vitestFiles": 5,
+    "vitestTests": 23,
+    "playwrightTests": 72,
+    "projects": ["phone-360", "phone-390", "tablet", "desktop"],
+    "productionJsGzipKb": 148.9
+  },
+  "renderer": {
+    "liveFps": 60,
+    "liveDrawCalls": 87,
+    "livePixelRatio": 1,
+    "drawCallBudget": 100,
+    "mobilePixelRatioCap": 1.25,
+    "desktopPixelRatioCap": 1.5
+  },
+  "lighthouse": {
+    "local": {
+      "source": ".agent/tasks/issue-2/raw/lighthouse-local.json",
+      "scores": {"performance": 80, "accessibility": 100, "bestPractices": 100, "seo": 100},
+      "metrics": {"fcpMs": 1652.734, "lcpMs": 2708.734, "tbtMs": 587, "cls": 0}
+    },
+    "live": {
+      "source": ".agent/tasks/issue-2/raw/lighthouse-live.json",
+      "scores": {"performance": 84, "accessibility": 100, "bestPractices": 100, "seo": 100},
+      "metrics": {"fcpMs": 3076.6785, "lcpMs": 3076.6785, "tbtMs": 0, "cls": 0}
+    }
+  },
+  "adversarialFindings": {
+    "performanceSampleResetPerQuestion": "resolved_and_tested",
+    "reducedMotionSlowedDecisionCadence": "resolved_and_tested"
+  },
+  "residualRisks": [
+    "Real low-end mobile GPU performance is not yet measured",
+    "Recovery after WebGL context loss is not automated",
+    "Human bilingual review is required before a broader child pilot",
+    "Local engagement metrics do not establish learning efficacy or market demand"
+  ]
+}
