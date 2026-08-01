@@ -140,7 +140,8 @@ test("turns a correct lane choice into a physical gate opening without a modal p
           snapshot &&
             snapshot.doorOpen > 0.25 &&
             /opening|cleared/.test(snapshot.gateResponse) &&
-            snapshot.worldSpeed > 8.8,
+            snapshot.worldSpeed > 8.8 &&
+            snapshot.drawCalls < 100,
         );
       }),
     )

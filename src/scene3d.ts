@@ -26,6 +26,7 @@ import {
   TorusGeometry,
   WebGLRenderer,
 } from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 import type { Side } from "./types";
 
@@ -349,17 +350,17 @@ function createGateLane(
   const lane = new Group();
   lane.position.x = x;
 
-  const postGeometry = new BoxGeometry(0.28, 3.15, 0.45);
-  const leftPost = new Mesh(postGeometry, frameMaterial);
-  leftPost.position.set(-1.7, 1.58, 0);
-  lane.add(leftPost);
-  const rightPost = new Mesh(postGeometry, frameMaterial);
-  rightPost.position.set(1.7, 1.58, 0);
-  lane.add(rightPost);
-
-  const beam = new Mesh(new BoxGeometry(3.68, 0.38, 0.48), frameMaterial);
-  beam.position.y = 3.12;
-  lane.add(beam);
+  const frameParts = [
+    new BoxGeometry(0.28, 3.15, 0.45).translate(-1.7, 1.58, 0),
+    new BoxGeometry(0.28, 3.15, 0.45).translate(1.7, 1.58, 0),
+    new BoxGeometry(3.68, 0.38, 0.48).translate(0, 3.12, 0),
+  ];
+  const frameGeometry = mergeGeometries(frameParts);
+  frameParts.forEach((geometry) => geometry.dispose());
+  if (!frameGeometry) {
+    throw new Error("Unable to merge gate frame geometry");
+  }
+  lane.add(new Mesh(frameGeometry, frameMaterial));
 
   const panel = new Mesh(new PlaneGeometry(3.15, 2.15), panelMaterial);
   panel.position.set(0, 1.48, 0.26);

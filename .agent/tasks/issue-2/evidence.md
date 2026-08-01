@@ -95,3 +95,39 @@ This is still a public `SYNTHETIC DEMO`. The 24 concepts require human bilingual
 review before a broader supervised child pilot. Local engagement and renderer
 metrics do not prove learning efficacy, retention, demand, payment intent, or
 native-app viability.
+
+## Core-loop feel follow-up — 2026-08-01
+
+The follow-up rebuilt the moment-to-moment run without adding an economy,
+account, telemetry provider, or runtime dependency:
+
+- gates now approach within the decision cadence and answer panels behave as
+  physical doors: the correct lane opens, while a mistake visibly blocks the
+  runner;
+- the runner plants shoes with the leg motion, leans into lane changes, reacts
+  with hands and body weight, and accelerates with a correct-answer streak;
+- feedback is a compact non-modal strip, so the scene remains visible and the
+  next decision does not feel like a sequence of dialog boxes;
+- the two three-piece gate frames are batched into one geometry per lane using
+  the installed Three.js utility, preserving the look while reducing render
+  calls.
+
+Fresh local verification after the batching change:
+
+- Vitest: 6 files and 31 tests passed;
+- TypeScript and Vite production build: passed;
+- Playwright: 88 tests passed across phone 360, phone 390, tablet, and desktop;
+- dependency audit: 0 vulnerabilities;
+- full-motion 390x844 Chromium sample: 60 FPS and 75 draw calls while
+  approaching; 60 FPS and 77 draw calls during the opening response, with
+  `doorOpen=0.52`, `runnerLean=0.11`, and `worldSpeed=10.7`.
+
+Visual comparison sources:
+
+- public pre-batching frame: `.agent/tasks/issue-2/raw/core-loop-live-390x844.png`;
+- local post-batching frame: `.agent/tasks/issue-2/raw/core-loop-local-optimized-390x844.png`.
+
+The canonical Issue #2 records the final commit, GitHub Actions deployment, and
+independent public hash and runtime readback after publication. This work proves
+the implemented interaction and its technical budget; only a supervised child
+playtest can establish whether the new loop actually improves replay and recall.
