@@ -148,6 +148,43 @@ describe("loadState", () => {
     );
   });
 
+  it("accepts 3D performance events and rejects invalid input methods", () => {
+    const state = createDefaultState();
+    const validEvent = {
+      schemaVersion: 1,
+      id: "event-3d",
+      type: "render_sampled",
+      timestamp: "2026-08-01T08:00:00.000Z",
+      participantId: state.participantId,
+      sessionId: "session-1",
+      runId: "run-1",
+      lessonId: "animals",
+      conceptId: null,
+      selectedSide: null,
+      correct: null,
+      rating: null,
+      inputMethod: null,
+      fps: 58,
+      drawCalls: 74,
+      pixelRatio: 1.25,
+    };
+    const validStorage = createStorage({
+      [STORAGE_KEY]: JSON.stringify({ ...state, eventLog: [validEvent] }),
+    });
+
+    expect(loadState(validStorage).warning).toBeNull();
+
+    const invalidStorage = createStorage({
+      [STORAGE_KEY]: JSON.stringify({
+        ...state,
+        eventLog: [{ ...validEvent, type: "lane_selected", inputMethod: "tilt" }],
+      }),
+    });
+    expect(loadState(invalidStorage).warning).toBe(
+      "Локальні дані мають невідомий формат. Їх не було перезаписано.",
+    );
+  });
+
   it("rejects nested concept progress with mismatched attempts and outcomes", () => {
     const state = createDefaultState();
     const storage = createStorage({

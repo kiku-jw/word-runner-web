@@ -42,6 +42,51 @@ test("shows the privacy-first welcome and avoids third-party traffic or cookies"
   }
 });
 
+test("opens with a real 3D attract scene and starts a run in one tap", async ({
+  page,
+}) => {
+  await gotoApp(page);
+
+  const canvas = page.getByTestId("runner-canvas");
+  await expect(canvas).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.frameCount ?? 0),
+    )
+    .toBeGreaterThan(2);
+
+  await page.getByRole("button", { name: "Почати забіг" }).click();
+  await expect(page.getByTestId("game-stage")).toBeVisible();
+  await expect(page.getByText("1 / 10")).toBeVisible();
+  const state = await readPilotState(page);
+  expect(state.eventLog.some((event) => event.type === "run_started")).toBe(true);
+
+  const snapshot = await page.evaluate(() =>
+    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
+  );
+  expect(snapshot?.ready).toBe(true);
+  expect(snapshot?.questionId).not.toBeNull();
+  expect(snapshot?.drawCalls).toBeLessThan(100);
+  expect(snapshot?.pixelRatio).toBeLessThanOrEqual(1.25);
+
+  await expect
+    .poll(async () => {
+      const current = await readPilotState(page);
+      return current.eventLog.some((event) => event.type === "render_sampled");
+    }, { timeout: 8_000 })
+    .toBe(true);
+  const sampledState = await readPilotState(page);
+  const sample = sampledState.eventLog.find(
+    (event) => event.type === "render_sampled",
+  );
+  expect(sample?.fps).toBeGreaterThan(0);
+  expect(sample?.drawCalls).toBeLessThan(100);
+  const settledSnapshot = await page.evaluate(() =>
+    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
+  );
+  expect(settledSnapshot?.gateZ).toBeGreaterThan(-18);
+});
+
 test("guides a child from lesson review through ten gates to the result screen", async ({
   page,
 }) => {
@@ -59,6 +104,10 @@ test("guides a child from lesson review through ten gates to the result screen",
   await expect(page.locator(".practised-words span")).toHaveCount(6);
   await expect(page.getByRole("button", { name: "Бігти ще раз" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Інший набір" })).toBeVisible();
+  const completedState = await readPilotState(page);
+  expect(
+    completedState.eventLog.some((event) => event.type === "render_sampled"),
+  ).toBe(true);
 });
 
 test("restores an in-progress run after reload without losing local progress", async ({

@@ -5,8 +5,8 @@
 - **Product name:** Word Runner (working title; final name `[TBD]`)
 - **Product owner:** Nick
 - **Document audience:** Product owner and AI implementation agent
-- **Date:** 2026-07-30
-- **Status:** Draft for implementation
+- **Date:** 2026-08-01
+- **Status:** Implemented 3D validation slice
 - **Stage:** Validation prototype
 - **MVP deadline:** `[TBD]`
 - **Budget:** `[TBD]`
@@ -89,11 +89,15 @@ These stories require validation during the pilot.
 
 ## 5. Proposed Solution
 
-The MVP is a portrait, mobile-first web prototype in a lightweight 2.5D style:
+The MVP is a portrait, mobile-first web prototype with a real-time 3D runner
+scene and native DOM overlays:
 
-1. An adult opens the prototype and confirms the local-only pilot notice.
-2. The child sees a short interactive demonstration of choosing the correct gate.
-3. On the first visit to a lesson, the child reviews six word cards at their own pace. Each card contains:
+1. An adult opens the prototype, confirms the local-only pilot notice, and sees
+   the runner moving in the 3D world immediately.
+2. The child can start a default `Тварини` run with one tap or open the lesson
+   picker and review flow.
+3. In the optional first visit to a selected lesson, the child reviews six word
+   cards at their own pace. Each card contains:
    - an emoji glyph;
    - a Ukrainian source word;
    - an English target word;
@@ -115,6 +119,12 @@ The MVP is a portrait, mobile-first web prototype in a lightweight 2.5D style:
 ### 6.1 Visual hierarchy
 
 - Show one readable decision pair at a time.
+- Render the road, player, scenery, and answer arches with actual WebGL
+  perspective and depth when WebGL2 is available.
+- Keep prompts, readable gate hit areas, feedback, audio state, and progress in
+  native DOM so the canvas is never the only interaction or accessibility layer.
+- Preserve the complete two-choice flow with a simplified CSS scene when WebGL2
+  is unavailable.
 - Use Ukrainian for all child-facing navigation, instructions, and controls.
 - The current Ukrainian prompt must be the largest text element in the play area.
 - Gate labels must remain readable at the smallest supported viewport.
@@ -270,8 +280,11 @@ interface RunQuestion {
 type PilotEventType =
   | "session_started"
   | "session_resumed"
+  | "run_started"
   | "question_shown"
+  | "lane_selected"
   | "answer_selected"
+  | "render_sampled"
   | "run_completed"
   | "replay_started"
   | "enjoyment_rated";
@@ -287,8 +300,12 @@ interface PilotEvent {
   lessonId: string | null;
   conceptId: string | null;
   selectedSide: "left" | "right" | null;
+  inputMethod: "tap" | "swipe" | "keyboard" | null;
   correct: boolean | null;
   rating: number | null;
+  fps: number | null;
+  drawCalls: number | null;
+  pixelRatio: number | null;
 }
 ```
 
@@ -300,7 +317,9 @@ Each event may contain only:
 - ISO timestamp;
 - lesson or concept ID when applicable;
 - selected side and correctness when applicable;
-- numeric enjoyment rating when applicable.
+- accepted input method when applicable;
+- numeric enjoyment rating when applicable;
+- one renderer FPS, draw-call, and pixel-ratio sample per run when WebGL is active.
 
 No event may contain a child’s name, date of birth, contact details, free-text response, device advertising ID, IP address captured by application code, or precise location.
 
@@ -320,7 +339,7 @@ No event may contain a child’s name, date of birth, contact details, free-text
 | IN — MVP | OUT — after validation |
 |---|---|
 | Portrait mobile-first web prototype | Native iOS or Android apps |
-| Lightweight 2.5D runner presentation | Full 3D world, physics, or character customization |
+| One procedural WebGL runner world | Physics, multiple worlds, or character customization |
 | Ukrainian-to-English only | Additional language directions |
 | Four lessons and 24 prototype-reviewed concepts | Full 100-word pack |
 | Six-card introduction per lesson | Complete teaching curriculum |
@@ -338,7 +357,9 @@ No event may contain a child’s name, date of birth, contact details, free-text
 
 ## 11. P0 Requirements
 
-- **P0-01:** The application must complete the full notice → introduction → lesson review → run → feedback → results → replay flow without an account or backend.
+- **P0-01:** The application must complete the full notice → quick start or
+  lesson review → run → feedback → results → replay flow without an account or
+  backend.
 - **P0-02:** The active play area must work at supported portrait phone sizes without clipped prompts, gates, controls, or result actions.
 - **P0-03:** A child must be able to select either lane by tapping or swiping, while desktop users can use arrow keys.
 - **P0-04:** Every run must contain ten valid two-choice questions produced from one six-concept lesson.
@@ -352,6 +373,12 @@ No event may contain a child’s name, date of birth, contact details, free-text
 - **P0-12:** The default experience must honour muted audio and reduced-motion preferences without making the questions unusable.
 - **P0-13:** All 24 concepts require bilingual owner review before a supervised child pilot; the public UX prototype must label them as prototype content until then.
 - **P0-14:** All child-facing UI must be Ukrainian and remain readable and operable at the defined phone and tablet viewports.
+- **P0-15:** A WebGL2-capable browser must show a perspective 3D road, animated
+  runner, scenery, and physical answer gates without replacing the DOM control
+  and feedback layer.
+- **P0-16:** A browser without WebGL2 must retain a usable two-choice CSS flow.
+- **P0-17:** The renderer must cap device pixel ratio and stay below 100 settled
+  draw calls in the automated reference browser.
 
 ## 12. Success Metrics
 
@@ -367,6 +394,7 @@ The pilot target is 20 children; the minimum interpretable sample is 12 children
 | Control-related lost responses | No more than 10% | Standard facilitator observation sheet |
 | Blocking reliability | Zero blocking failures during pilot sessions | Facilitator log and local export |
 | Local progress integrity | 100% of tested reloads preserve valid state | Pre-pilot acceptance test |
+| Reference renderer budget | Median FPS at least 45 and settled draw calls below 100 | One local sample per run plus pre-pilot browser QA |
 
 These thresholds are decision gates chosen for the pilot; they are not existing market evidence.
 
@@ -427,8 +455,11 @@ Do not rescue a failed gate by adding more content, platforms, monetization, or 
 
 **Scope**
 
-- Implement notice, demonstration, lesson review, runner, feedback, results, and replay.
+- Implement notice, one-tap quick start, lesson review, a procedural 3D runner,
+  feedback, results, and replay.
 - Implement touch, swipe, keyboard, audio mute, and reduced motion.
+- Use one direct Three.js renderer; do not add a physics engine, 3D framework,
+  or runtime model pipeline for this slice.
 - Package all runtime content locally.
 
 **Testable output**
@@ -454,21 +485,28 @@ Do not rescue a failed gate by adding more content, platforms, monetization, or 
 
 ## 16. Acceptance Test Scenarios
 
-1. **First-time happy path:** An adult confirms the notice; a child reviews six cards, finishes ten gates, sees results, and starts another run.
-2. **Both choices:** Correct answers on both left and right gates work through tap, swipe, and keyboard input.
-3. **Gesture boundaries:** Short or vertical gestures do not change lanes; the page does not scroll during play.
-4. **Wrong answer:** A mistake shows the correct pair and audio, does not end the run, and schedules a valid repeat when space permits.
-5. **Late wrong answer:** A mistake in either of the last two gates marks the concept as prioritized for the next run.
-6. **Side balance:** Generated runs never place the correct answer on one side more than three times consecutively.
-7. **Content ambiguity:** A pack containing a missing concept, duplicate ID, invalid distractor, or multiple defensible answers is rejected before play.
-8. **Reload recovery:** Reloading during a run restores the same run, question index, counts, and local log without duplicating the last answer.
-9. **Connection loss:** Turning off the network after the app and assets load does not interrupt the current run.
-10. **Audio muted:** The complete flow remains understandable with audio disabled.
-11. **Reduced motion:** Reduced-motion mode removes nonessential movement while preserving lane selection and feedback.
-12. **Small viewport:** The prompt, two gates, progress, and controls remain readable and tappable without horizontal scrolling.
-13. **Privacy:** Network inspection shows no analytics transmission; exported JSON contains no prohibited personal or device fields.
-14. **Asset failure:** A missing required local asset produces an adult-facing error rather than an incomplete child-facing question.
-15. **Pilot metrics:** A facilitator can distinguish first completion, voluntary replay, later return, enjoyment, and blocking failure from the summary/export.
+1. **First-time happy path:** An adult confirms the notice; a child either uses
+   one-tap quick start or reviews a selected lesson, finishes ten gates, sees
+   results, and starts another run.
+2. **3D presentation:** A WebGL2-capable browser shows a perspective road,
+   moving player, scenery, and labelled arches; a browser without WebGL2 keeps
+   usable DOM controls and the CSS scene.
+3. **Both choices:** Correct answers on both left and right gates work through tap, swipe, and keyboard input.
+4. **Gesture boundaries:** Short or vertical gestures do not change lanes; the page does not scroll during play.
+5. **Wrong answer:** A mistake shows the correct pair and audio, does not end the run, and schedules a valid repeat when space permits.
+6. **Late wrong answer:** A mistake in either of the last two gates marks the concept as prioritized for the next run.
+7. **Side balance:** Generated runs never place the correct answer on one side more than three times consecutively.
+8. **Content ambiguity:** A pack containing a missing concept, duplicate ID, invalid distractor, or multiple defensible answers is rejected before play.
+9. **Reload recovery:** Reloading during a run restores the same run, question index, counts, and local log without duplicating the last answer.
+10. **Connection loss:** Turning off the network after the app and assets load does not interrupt the current run.
+11. **Audio muted:** The complete flow remains understandable with audio disabled.
+12. **Reduced motion:** Reduced-motion mode removes nonessential movement while preserving lane selection and feedback.
+13. **Small viewport:** The prompt, two gates, progress, and controls remain readable and tappable without horizontal scrolling.
+14. **Privacy:** Network inspection shows no analytics transmission; exported JSON contains no prohibited personal or device fields.
+15. **Asset failure:** A missing required local asset produces an adult-facing error rather than an incomplete child-facing question.
+16. **Pilot metrics:** A facilitator can distinguish run starts, first completion,
+    voluntary replay, later return, enjoyment, control method, and renderer health
+    from the summary/export.
 
 ## 17. Risks and Mitigations
 
@@ -496,9 +534,12 @@ These questions do not change the approved product hypothesis or MVP boundary, b
 
 ## 19. AI Implementation Guardrails
 
-- Do not add a dependency, framework, backend, analytics SDK, content service, or state-management layer without an explicit implementation decision.
+- Three.js is the explicit rendering dependency for the 3D validation slice. Do
+  not add another framework, physics engine, backend, analytics SDK, content
+  service, or state-management layer without a new implementation decision.
 - Do not create native mobile projects, PWA installation flows, authentication, payments, advertising, cloud storage, or remote telemetry.
 - Do not fabricate final translations, audio, images, licenses, pilot participants, observations, or metrics.
 - Keep gameplay rules deterministic and unit-testable outside the visual renderer.
-- Treat the supplied image as visual direction, not as a pixel-perfect or full-3D requirement.
+- Treat the supplied image as visual direction, not as a pixel-perfect target;
+  actual 3D depth and motion are required for the current validation slice.
 - Do not describe the prototype as educationally effective, market-validated, store-ready, or child-policy compliant based on this PRD alone.

@@ -1,5 +1,6 @@
 import type {
   ConceptProgress,
+  InputMethod,
   PilotEvent,
   PilotEventType,
   PilotState,
@@ -14,6 +15,10 @@ export interface EventDetails {
   selectedSide?: Side;
   correct?: boolean;
   rating?: number;
+  inputMethod?: InputMethod;
+  fps?: number;
+  drawCalls?: number;
+  pixelRatio?: number;
 }
 
 export function createPilotEvent(
@@ -39,6 +44,10 @@ export function createPilotEvent(
     selectedSide: details.selectedSide ?? null,
     correct: details.correct ?? null,
     rating: details.rating ?? null,
+    inputMethod: details.inputMethod ?? null,
+    fps: details.fps ?? null,
+    drawCalls: details.drawCalls ?? null,
+    pixelRatio: details.pixelRatio ?? null,
   };
 }
 
@@ -81,6 +90,26 @@ export interface MetricSummary {
   returnSessions: number;
   averageEnjoyment: number | null;
   lastActivityAt: string | null;
+  runsStarted: number;
+  laneInputs: number;
+  medianFps: number | null;
+}
+
+function median(values: readonly number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  const upper = sorted[middle];
+  if (upper === undefined) {
+    return null;
+  }
+  if (sorted.length % 2 === 1) {
+    return upper;
+  }
+  const lower = sorted[middle - 1] ?? upper;
+  return Math.round((lower + upper) / 2);
 }
 
 export function summarizeMetrics(events: readonly PilotEvent[]): MetricSummary {
@@ -98,6 +127,10 @@ export function summarizeMetrics(events: readonly PilotEvent[]): MetricSummary {
     .filter((event) => event.type === "enjoyment_rated")
     .map((event) => event.rating)
     .filter((rating): rating is number => rating !== null);
+  const fpsSamples = events
+    .filter((event) => event.type === "render_sampled")
+    .map((event) => event.fps)
+    .filter((fps): fps is number => typeof fps === "number" && fps > 0);
   const firstSessionAt = sessionEvents[0]?.timestamp;
   const firstSessionMs = firstSessionAt ? Date.parse(firstSessionAt) : null;
   const returnSessions =
@@ -127,6 +160,8 @@ export function summarizeMetrics(events: readonly PilotEvent[]): MetricSummary {
               10,
           ) / 10,
     lastActivityAt: events.at(-1)?.timestamp ?? null,
+    runsStarted: events.filter((event) => event.type === "run_started").length,
+    laneInputs: events.filter((event) => event.type === "lane_selected").length,
+    medianFps: median(fpsSamples),
   };
 }
-

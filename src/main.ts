@@ -19,8 +19,15 @@ import {
   saveState,
   serializePilotData,
 } from "./storage";
+import {
+  createRunnerScene,
+  type RunnerPerformanceSample,
+  type RunnerSceneController,
+  type RunnerSceneSnapshot,
+} from "./scene3d";
 import type {
   Concept,
+  InputMethod,
   Lesson,
   PilotEventType,
   PilotState,
@@ -83,6 +90,20 @@ let feedbackTimer: number | null = null;
 let parentGateTimer: number | null = null;
 let pointerStart: { x: number; y: number } | null = null;
 let lastShownQuestionId: string | null = null;
+let runnerScene: RunnerSceneController | null = null;
+let webglFailed = false;
+
+declare global {
+  interface Window {
+    __WORD_RUNNER_3D__?: {
+      snapshot(): RunnerSceneSnapshot | null;
+    };
+  }
+}
+
+window.__WORD_RUNNER_3D__ = {
+  snapshot: () => runnerScene?.snapshot() ?? null,
+};
 
 const sessionId = randomId("session");
 appendEvent("session_started");
@@ -233,8 +254,11 @@ function renderWelcome(): string {
           <img src="${asset("runner.webp")}" alt="" width="1024" height="1536" />
         </div>
         <div class="welcome-actions">
-          <button class="primary-button" type="button" data-action="accept-notice">
-            Почати
+          <button class="primary-button" type="button" data-action="quick-run">
+            Почати забіг
+          </button>
+          <button class="secondary-button" type="button" data-action="accept-notice">
+            Обрати набір
           </button>
           <button class="text-button" type="button" data-action="open-parent-gate">
             Для дорослих
@@ -462,7 +486,13 @@ function renderRun(): string {
           height="1536"
           aria-hidden="true"
         />
-        <p class="control-hint">Торкнися воріт, свайпни або натисни ← →</p>
+        <p class="control-hint">
+          ${
+            webglFailed
+              ? "Спрощений режим. Торкнися воріт, свайпни або натисни ← →"
+              : "Торкнися воріт, свайпни або натисни ← →"
+          }
+        </p>
         ${renderFeedback()}
       </section>
       ${warningMarkup()}
@@ -621,12 +651,15 @@ function renderMetrics(): string {
         </button>
       </header>
       <div class="metric-grid" aria-label="Зведені метрики">
+        <article><strong>${summary.runsStarted}</strong><span>стартів</span></article>
         <article><strong>${summary.runs}</strong><span>забігів</span></article>
         <article><strong>${summary.accuracyPercent}%</strong><span>точність у грі</span></article>
         <article><strong>${summary.replays}</strong><span>повторів</span></article>
         <article><strong>${summary.returnSessions}</strong><span>повернень після 12 год</span></article>
         <article><strong>${summary.averageEnjoyment ?? "Немає"}</strong><span>середня оцінка</span></article>
         <article><strong>${summary.sessions}</strong><span>сесій</span></article>
+        <article><strong>${summary.laneInputs}</strong><span>виборів смуги</span></article>
+        <article><strong>${summary.medianFps ?? "Немає"}</strong><span>медіана FPS</span></article>
       </div>
       <section class="metrics-detail" aria-labelledby="detail-heading">
         <div class="metrics-copy">
@@ -634,6 +667,10 @@ function renderMetrics(): string {
           <p>
             Час подій, вибір воріт, правильність, повтори та оцінка. Імен,
             контактів, реклами, cookies і віддаленої аналітики немає.
+          </p>
+          <p>
+            3D-режим також локально записує спосіб керування та один зразок FPS
+            за забіг.
           </p>
           <p><strong>Остання дія:</strong> ${formatDate(summary.lastActivityAt)}</p>
           <p><strong>Локальний ID:</strong> <code>${escapeHtml(state.participantId.slice(0, 12))}…</code></p>
@@ -713,6 +750,79 @@ function render(): void {
     }
   })();
   bindInteractions();
+  syncRunnerScene();
+}
+
+function recordRunnerPerformance(sample: RunnerPerformanceSample): void {
+  const run = state.activeRun;
+  if (
+    screen !== "run" ||
+    !run ||
+    state.eventLog.some(
+      (event) => event.type === "render_sampled" && event.runId === run.id,
+    )
+  ) {
+    return;
+  }
+  appendEvent("render_sampled", {
+    runId: run.id,
+    lessonId: run.lessonId,
+    fps: sample.fps,
+    drawCalls: sample.drawCalls,
+    pixelRatio: sample.pixelRatio,
+  });
+  persist();
+}
+
+function syncRunnerScene(): void {
+  if (
+    (screen !== "run" && screen !== "welcome") ||
+    document.visibilityState === "hidden"
+  ) {
+    runnerScene?.hide();
+    return;
+  }
+  if (runnerScene === null && !webglFailed) {
+    runnerScene = createRunnerScene({
+      anchor: root,
+      onPerformanceSample: recordRunnerPerformance,
+    });
+    if (runnerScene === null) {
+      webglFailed = true;
+      render();
+      return;
+    }
+  }
+  if (runnerScene === null) {
+    return;
+  }
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  runnerScene.show(reduceMotion);
+  if (screen === "welcome") {
+    runnerScene.attract();
+    return;
+  }
+  const run = state.activeRun;
+  const question = run?.questions[run.currentIndex];
+  if (!run || !question) {
+    runnerScene.hide();
+    return;
+  }
+  const options = optionsForQuestion(CONTENT_PACK, question);
+  runnerScene.sync({
+    runId: run.id,
+    id: question.id,
+    leftLabel: options.left.target.en,
+    rightLabel: options.right.target.en,
+    selectedSide: question.selectedSide,
+    correctSide: question.correctSide,
+    result:
+      feedback === null
+        ? null
+        : feedback.correct
+          ? "correct"
+          : "incorrect",
+  });
 }
 
 function currentConcept(): Concept | null {
@@ -774,6 +884,7 @@ function startRun(isReplay = false): void {
   if (isReplay) {
     appendEvent("replay_started", { runId: run.id, lessonId: lesson.id });
   }
+  appendEvent("run_started", { runId: run.id, lessonId: lesson.id });
   updateState({
     ...state,
     activeLessonId: lesson.id,
@@ -805,7 +916,7 @@ function finishCurrentRun(): void {
   render();
 }
 
-function answer(side: Side): void {
+function answer(side: Side, inputMethod: InputMethod): void {
   const run = state.activeRun;
   if (screen !== "run" || inputLocked || !run) {
     return;
@@ -830,6 +941,16 @@ function answer(side: Side): void {
     ),
   };
   appendEvent(
+    "lane_selected",
+    {
+      runId: result.run.id,
+      lessonId: result.run.lessonId,
+      conceptId: question.conceptId,
+      selectedSide: side,
+      inputMethod,
+    },
+  );
+  appendEvent(
     "answer_selected",
     {
       runId: result.run.id,
@@ -837,6 +958,7 @@ function answer(side: Side): void {
       conceptId: question.conceptId,
       selectedSide: side,
       correct: result.correct,
+      inputMethod,
     },
   );
   persist();
@@ -905,6 +1027,20 @@ function exportMetrics(): void {
 
 function handleAction(action: string): void {
   switch (action) {
+    case "quick-run": {
+      const lesson = CONTENT_PACK.lessons[0];
+      if (!lesson) {
+        return;
+      }
+      updateState({
+        ...state,
+        noticeConfirmed: true,
+        activeLessonId: lesson.id,
+        activeRun: null,
+      });
+      startRun();
+      break;
+    }
     case "accept-notice":
       updateState({ ...state, noticeConfirmed: true });
       screen = "lessons";
@@ -1008,7 +1144,7 @@ function bindInteractions(): void {
       event.stopPropagation();
       const side = button.dataset.side;
       if (side === "left" || side === "right") {
-        answer(side);
+        answer(side, "tap");
       }
     });
   });
@@ -1057,7 +1193,7 @@ function bindInteractions(): void {
       pointerStart = { x: event.clientX, y: event.clientY };
     });
     stage.addEventListener("pointerup", (event) => {
-      if (!pointerStart || (event.target as HTMLElement).closest("button")) {
+      if (!pointerStart) {
         pointerStart = null;
         return;
       }
@@ -1065,14 +1201,20 @@ function bindInteractions(): void {
       const deltaY = event.clientY - pointerStart.y;
       pointerStart = null;
       if (Math.abs(deltaX) >= 36 && Math.abs(deltaX) > Math.abs(deltaY)) {
-        answer(deltaX < 0 ? "left" : "right");
+        answer(deltaX < 0 ? "left" : "right", "swipe");
+        return;
+      }
+      if ((event.target as HTMLElement).closest("button")) {
         return;
       }
       if (Math.abs(deltaX) > 12 || Math.abs(deltaY) > 12) {
         return;
       }
       const bounds = stage.getBoundingClientRect();
-      answer(event.clientX < bounds.left + bounds.width / 2 ? "left" : "right");
+      answer(
+        event.clientX < bounds.left + bounds.width / 2 ? "left" : "right",
+        "tap",
+      );
     });
     stage.addEventListener("pointercancel", () => {
       pointerStart = null;
@@ -1086,11 +1228,11 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "ArrowLeft") {
     event.preventDefault();
-    answer("left");
+    answer("left", "keyboard");
   }
   if (event.key === "ArrowRight") {
     event.preventDefault();
-    answer("right");
+    answer("right", "keyboard");
   }
 });
 
@@ -1098,6 +1240,15 @@ window.addEventListener("beforeunload", () => {
   if (canSpeak) {
     window.speechSynthesis.cancel();
   }
+  runnerScene?.dispose();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    runnerScene?.hide();
+    return;
+  }
+  syncRunnerScene();
 });
 
 render();

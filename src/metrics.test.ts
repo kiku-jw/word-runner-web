@@ -17,6 +17,10 @@ function event(overrides: Partial<PilotEvent>): PilotEvent {
     selectedSide: overrides.selectedSide ?? null,
     correct: overrides.correct ?? null,
     rating: overrides.rating ?? null,
+    inputMethod: overrides.inputMethod ?? null,
+    fps: overrides.fps ?? null,
+    drawCalls: overrides.drawCalls ?? null,
+    pixelRatio: overrides.pixelRatio ?? null,
   };
 }
 
@@ -24,6 +28,14 @@ describe("summarizeMetrics", () => {
   it("summarizes sessions, answers, replays, returns, and enjoyment ratings", () => {
     const events: PilotEvent[] = [
       event({ id: "e1", type: "session_started", timestamp: "2026-07-30T09:00:00.000Z" }),
+      event({ id: "start-1", type: "run_started", runId: "run-1" }),
+      event({
+        id: "lane-1",
+        type: "lane_selected",
+        runId: "run-1",
+        selectedSide: "left",
+        inputMethod: "swipe",
+      }),
       event({
         id: "e2",
         type: "answer_selected",
@@ -46,6 +58,9 @@ describe("summarizeMetrics", () => {
       }),
       event({ id: "e4", type: "run_completed", timestamp: "2026-07-30T09:03:00.000Z", runId: "run-1" }),
       event({ id: "e5", type: "replay_started", timestamp: "2026-07-30T09:04:00.000Z", runId: "run-2" }),
+      event({ id: "start-2", type: "run_started", runId: "run-2" }),
+      event({ id: "fps-1", type: "render_sampled", runId: "run-1", fps: 57 }),
+      event({ id: "fps-2", type: "render_sampled", runId: "run-2", fps: 51 }),
       event({
         id: "e6",
         type: "enjoyment_rated",
@@ -90,6 +105,9 @@ describe("summarizeMetrics", () => {
       returnSessions: 1,
       averageEnjoyment: 4.5,
       lastActivityAt: "2026-07-30T22:02:00.000Z",
+      runsStarted: 2,
+      laneInputs: 1,
+      medianFps: 54,
     });
   });
 });

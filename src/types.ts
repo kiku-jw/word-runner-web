@@ -1,4 +1,5 @@
 export type Side = "left" | "right";
+export type InputMethod = "tap" | "swipe" | "keyboard";
 export type QuestionOrigin = "base" | "repeat" | "correction";
 
 export interface Concept {
@@ -63,8 +64,11 @@ export interface ConceptProgress {
 export type PilotEventType =
   | "session_started"
   | "session_resumed"
+  | "run_started"
   | "question_shown"
+  | "lane_selected"
   | "answer_selected"
+  | "render_sampled"
   | "run_completed"
   | "replay_started"
   | "enjoyment_rated";
@@ -82,6 +86,10 @@ export interface PilotEvent {
   selectedSide: Side | null;
   correct: boolean | null;
   rating: number | null;
+  inputMethod?: InputMethod | null;
+  fps?: number | null;
+  drawCalls?: number | null;
+  pixelRatio?: number | null;
 }
 
 export interface PilotState {
@@ -95,4 +103,3 @@ export interface PilotState {
   conceptProgress: Record<string, ConceptProgress>;
   eventLog: PilotEvent[];
 }
-

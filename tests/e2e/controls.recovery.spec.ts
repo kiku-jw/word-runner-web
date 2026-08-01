@@ -68,6 +68,11 @@ test("supports tap answers on both left and right gates", async ({ page }) => {
   }
 
   expect(seenSides).toEqual(new Set(["left", "right"]));
+  const state = await readPilotState(page);
+  expect(
+    state.eventLog.filter((event) => event.type === "lane_selected").at(-1)
+      ?.inputMethod,
+  ).toBe("tap");
 });
 
 test("supports horizontal swipe answers on both left and right sides", async ({
@@ -99,6 +104,11 @@ test("supports horizontal swipe answers on both left and right sides", async ({
   }
 
   expect(seenSides).toEqual(new Set(["left", "right"]));
+  const state = await readPilotState(page);
+  expect(
+    state.eventLog.filter((event) => event.type === "lane_selected").at(-1)
+      ?.inputMethod,
+  ).toBe("swipe");
 });
 
 test("supports ArrowLeft and ArrowRight answers on both sides", async ({
@@ -132,6 +142,11 @@ test("supports ArrowLeft and ArrowRight answers on both sides", async ({
   }
 
   expect(seenSides).toEqual(new Set(["left", "right"]));
+  const state = await readPilotState(page);
+  expect(
+    state.eventLog.filter((event) => event.type === "lane_selected").at(-1)
+      ?.inputMethod,
+  ).toBe("keyboard");
 });
 
 test("locks input after the first answer and ignores a second control before feedback ends", async ({
@@ -158,9 +173,16 @@ test("locks input after the first answer and ignores a second control before fee
     (event) => event.type === "answer_selected",
   ).length;
 
-  await page.locator(`[data-side="${firstSide}"]`).click();
+  await page.locator(`[data-side="${firstSide}"]`).evaluate(
+    (button, key) => {
+      (button as HTMLButtonElement).click();
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key, bubbles: true }),
+      );
+    },
+    secondSide === "left" ? "ArrowLeft" : "ArrowRight",
+  );
   await expect(page.locator(`[data-side="${secondSide}"]`)).toBeDisabled();
-  await page.keyboard.press(secondSide === "left" ? "ArrowLeft" : "ArrowRight");
 
   await waitForAdvance(page, run.currentIndex);
 
@@ -362,4 +384,38 @@ test("shows degraded audio copy without dead buttons when speech synthesis is un
   await openLesson(page, "Тварини");
   await expect(page.getByText("Озвучення недоступне")).toBeVisible();
   await expect(page.locator('[data-action="speak-current"]')).toHaveCount(0);
+});
+
+test("keeps the existing 2D controls usable when WebGL2 is unavailable", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function getContext(
+      this: HTMLCanvasElement,
+      contextId: string,
+      options?: unknown,
+    ) {
+      if (contextId === "webgl2") {
+        return null;
+      }
+      return original.call(this, contextId, options as never);
+    } as typeof HTMLCanvasElement.prototype.getContext;
+  });
+
+  await gotoApp(page);
+  await expect(page.getByTestId("runner-canvas")).toHaveCount(0);
+  await acceptNotice(page);
+  await openLesson(page, "Тварини");
+  await finishReview(page);
+  await expect(page.getByText("Спрощений режим.")).toBeVisible();
+  await expect(page.locator(".runner-sprite")).toBeVisible();
+
+  const before = await readPilotState(page);
+  const side = before.activeRun?.questions[0]?.correctSide;
+  if (!side) {
+    throw new Error("Fallback question is missing.");
+  }
+  await page.locator(`[data-side="${side}"]`).click();
+  await waitForAdvance(page, 0);
 });

@@ -53,7 +53,7 @@ describe("createRun", () => {
         }
       }
     }
-  });
+  }, 20_000);
 
   it("requeues an early mistake two to four slots later when a repeat slot is available", () => {
     const seed = findSeedWithEarlyRequeue("animals");

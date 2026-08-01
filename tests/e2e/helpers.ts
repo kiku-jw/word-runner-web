@@ -18,7 +18,13 @@ type StoredPilotState = {
   activeRun: StoredRunState | null;
   reviewedLessonIds: string[];
   conceptProgress: Record<string, unknown>;
-  eventLog: Array<{ type: string }>;
+  eventLog: Array<{
+    type: string;
+    inputMethod?: string | null;
+    fps?: number | null;
+    drawCalls?: number | null;
+    pixelRatio?: number | null;
+  }>;
 };
 
 export async function gotoApp(page: Page): Promise<void> {
@@ -30,7 +36,7 @@ export async function gotoApp(page: Page): Promise<void> {
 }
 
 export async function acceptNotice(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Почати" }).click();
+  await page.getByRole("button", { name: "Обрати набір" }).click();
   await expect(page.getByRole("heading", { name: "Куди біжимо?" })).toBeVisible();
 }
 

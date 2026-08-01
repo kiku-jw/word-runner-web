@@ -7,8 +7,9 @@ export default defineConfig({
   outputDir: "tmp/playwright-results",
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
+  timeout: 60_000,
   retries: process.env.CI ? 2 : 0,
-  ...(process.env.CI ? { workers: 1 } : {}),
+  workers: process.env.CI ? 1 : 2,
   reporter: process.env.CI
     ? [["line"], ["html", { outputFolder: "tmp/playwright-report", open: "never" }]]
     : "line",

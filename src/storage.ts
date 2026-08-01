@@ -1,6 +1,7 @@
 import { CONTENT_PACK } from "./content";
 import type {
   ConceptProgress,
+  InputMethod,
   PilotEvent,
   PilotEventType,
   PilotState,
@@ -67,6 +68,20 @@ function isFiniteRating(value: unknown): value is number | null {
   );
 }
 
+function isOptionalFiniteNumber(value: unknown): boolean {
+  return value === undefined || value === null || Number.isFinite(value);
+}
+
+function isOptionalInputMethod(value: unknown): value is InputMethod | null | undefined {
+  return (
+    value === undefined ||
+    value === null ||
+    value === "tap" ||
+    value === "swipe" ||
+    value === "keyboard"
+  );
+}
+
 function isRunQuestion(value: unknown): value is RunQuestion {
   if (!isRecord(value)) {
     return false;
@@ -126,8 +141,11 @@ function isConceptProgress(value: unknown): value is ConceptProgress {
 const PILOT_EVENT_TYPES: ReadonlySet<PilotEventType> = new Set([
   "session_started",
   "session_resumed",
+  "run_started",
   "question_shown",
+  "lane_selected",
   "answer_selected",
+  "render_sampled",
   "run_completed",
   "replay_started",
   "enjoyment_rated",
@@ -150,7 +168,11 @@ function isPilotEvent(value: unknown): value is PilotEvent {
     isNullableString(value.conceptId) &&
     (value.selectedSide === null || isSide(value.selectedSide)) &&
     (value.correct === null || typeof value.correct === "boolean") &&
-    isFiniteRating(value.rating)
+    isFiniteRating(value.rating) &&
+    isOptionalInputMethod(value.inputMethod) &&
+    isOptionalFiniteNumber(value.fps) &&
+    isOptionalFiniteNumber(value.drawCalls) &&
+    isOptionalFiniteNumber(value.pixelRatio)
   );
 }
 
