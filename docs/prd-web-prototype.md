@@ -105,7 +105,8 @@ scene and native DOM overlays:
 4. The child starts a 10-question run lasting approximately 2–4 minutes.
 5. A Ukrainian word appears above the track and two English answer gates appear ahead.
 6. The child changes lane by tapping a side of the screen or swiping horizontally. Desktop QA also supports the left and right arrow keys.
-7. At the gate, the game shows immediate feedback for approximately one second:
+7. At the gate, the game shows immediate feedback in a compact, non-modal track
+   overlay for approximately 0.7–0.95 seconds:
    - the concept glyph;
    - the correct English word;
    - the Ukrainian word;
@@ -164,10 +165,14 @@ scene and native DOM overlays:
 
 ### 6.5 Feedback and results
 
-- Correct answer: positive animation, correct pair, image, and English audio.
-- Wrong answer: gentle slowdown or soft collision, followed by the same correct pair, image, and audio.
+- Correct answer: the selected door opens, the pace lifts, and the correct pair,
+  image, and English audio remain readable without dimming the run.
+- Wrong answer: the selected door stays closed and causes a gentle slowdown or
+  soft collision, followed by the same correct pair, image, and audio.
 - Do not use red failure screens, ridicule, loss of life, forced restart, or negative audio.
-- Default feedback duration is approximately 1,000 ms and may extend only enough to avoid cutting off the target pronunciation.
+- Default feedback duration is approximately 760 ms for a correct answer and
+  940 ms for a correction. It may extend only enough to avoid cutting off the
+  target pronunciation.
 - Results show:
   - `10` completed gates;
   - correct answers out of `10`;

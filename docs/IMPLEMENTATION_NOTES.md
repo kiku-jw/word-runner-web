@@ -49,6 +49,13 @@ learning efficacy.
 - One cobalt/sky-blue family with a lime success accent.
 - A code-native low-poly Carpathian world with perspective road, water,
   mountains, trees, depth fog, a moving runner, and physical answer arches.
+- The active answer panels are physical doors: a correct lane opens before the
+  runner reaches it, while a wrong lane stays closed, absorbs the approach, and
+  triggers a gentle recoil. Lateral velocity drives runner lean, and a correct
+  streak modestly increases world speed without adding an economy.
+- Correction is a short, non-modal track overlay. It never dims the scene or
+  intercepts input, while the DOM still owns readable word pairing and live
+  status semantics.
 - Generated static artwork is retained only for menus and the CSS fallback.
 
 ## Update policy

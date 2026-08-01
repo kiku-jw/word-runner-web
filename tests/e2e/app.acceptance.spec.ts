@@ -70,6 +70,14 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
   expect(snapshot?.pixelRatio).toBeLessThanOrEqual(1.25);
 
   await expect
+    .poll(
+      () =>
+        page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.gateZ ?? -99),
+      { timeout: 2_500 },
+    )
+    .toBeGreaterThan(-7.2);
+
+  await expect
     .poll(async () => {
       const current = await readPilotState(page);
       return current.eventLog.some((event) => event.type === "render_sampled");
@@ -85,6 +93,55 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
     window.__WORD_RUNNER_3D__?.snapshot() ?? null,
   );
   expect(settledSnapshot?.gateZ).toBeGreaterThan(-18);
+});
+
+test("turns a correct lane choice into a physical gate opening without a modal pause", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Тварини");
+  await finishReview(page);
+
+  const runState = await readPilotState(page);
+  const activeRun = runState.activeRun;
+  const question = activeRun?.questions[activeRun.currentIndex];
+  expect(question).toBeTruthy();
+
+  await page.locator(`[data-side="${question?.correctSide}"]`).click();
+  const feedback = page.locator(".feedback-layer");
+  await expect(feedback).toBeVisible();
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.doorOpen ?? 0),
+    )
+    .toBeGreaterThan(0.25);
+
+  const physicalState = await page.evaluate(() =>
+    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
+  );
+  expect(physicalState?.gateResponse).toMatch(/opening|cleared/);
+  expect(physicalState?.worldSpeed).toBeGreaterThan(8.8);
+
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Math.abs(window.__WORD_RUNNER_3D__?.snapshot()?.runnerLean ?? 0),
+      ),
+    )
+    .toBeGreaterThan(0.02);
+
+  const [feedbackBox, stageBox, pointerEvents] = await Promise.all([
+    feedback.boundingBox(),
+    page.getByTestId("game-stage").boundingBox(),
+    feedback.evaluate((element) => getComputedStyle(element).pointerEvents),
+  ]);
+  expect(feedbackBox).not.toBeNull();
+  expect(stageBox).not.toBeNull();
+  expect(feedbackBox!.height).toBeLessThan(stageBox!.height * 0.22);
+  expect(pointerEvents).toBe("none");
 });
 
 test("adds one deterministic background gag and a playful wrong-answer reaction", async ({
@@ -130,6 +187,16 @@ test("adds one deterministic background gag and a playful wrong-answer reaction"
     });
 
   expect(wrongReaction).toMatch(/stumble|backpack|gate/);
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.gateResponse),
+    )
+    .toBe("blocked");
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.worldSpeed ?? 99),
+    )
+    .toBeLessThan(3.2);
   await expect
     .poll(() =>
       page.evaluate(

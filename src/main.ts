@@ -437,11 +437,10 @@ function renderFeedback(): string {
     <div class="feedback-layer" role="status" aria-live="assertive">
       <div class="feedback-card ${feedback.correct ? "feedback-correct" : "feedback-correction"}">
         <span class="feedback-reaction" aria-hidden="true">
-          ${feedback.correct ? "Так!" : "О-о!"}
+          ${feedback.correct ? "Є!" : "О-о"}
         </span>
         <span class="feedback-glyph" aria-hidden="true">${concept.glyph}</span>
         <div>
-          <span class="feedback-label">${feedback.correct ? "Правильно" : "Запам’ятай"}</span>
           <strong>${escapeHtml(concept.target.en)}</strong>
           <span>${escapeHtml(concept.source.uk)}</span>
         </div>
@@ -464,6 +463,7 @@ function renderRun(): string {
   const concept = conceptById(CONTENT_PACK, question.conceptId);
   const options = optionsForQuestion(CONTENT_PACK, question);
   const selectedSide = question.selectedSide;
+  const correctStreak = currentCorrectStreak(run);
   return `
     ${sceneStart("scene-run")}
       <div class="run-contrast"></div>
@@ -474,8 +474,20 @@ function renderRun(): string {
         aria-label="Ігрова доріжка. Обери ліві або праві ворота."
       >
         <div class="prompt-cloud">
-          <span>Обери переклад</span>
+          <span>Що це англійською?</span>
           <h1>${escapeHtml(concept.source.uk)}</h1>
+        </div>
+        <div class="run-hud" aria-label="Результат і темп забігу">
+          <span class="run-score" aria-label="Правильних відповідей: ${run.correctCount}">
+            <b aria-hidden="true">✓</b> ${run.correctCount}
+          </span>
+          <span
+            class="run-streak${correctStreak >= 2 ? " is-hot" : ""}"
+            aria-label="Серія правильних відповідей: ${correctStreak}"
+          >
+            <b aria-hidden="true">⚡</b>
+            ${correctStreak >= 2 ? `×${correctStreak}` : "темп"}
+          </span>
         </div>
         <div class="future-gates" aria-hidden="true">
           <span></span><span></span>
@@ -492,13 +504,15 @@ function renderRun(): string {
           height="1536"
           aria-hidden="true"
         />
-        <p class="control-hint">
-          ${
-            webglFailed
-              ? "Спрощений режим. Торкнися воріт, свайпни або натисни ← →"
-              : "Торкнися воріт, свайпни або натисни ← →"
-          }
-        </p>
+        ${
+          run.currentIndex === 0
+            ? `<p class="control-hint">${
+                webglFailed
+                  ? "Спрощений режим. Торкнися воріт, свайпни або натисни ← →"
+                  : "Торкнися воріт або свайпни"
+              }</p>`
+            : ""
+        }
         ${renderFeedback()}
       </section>
       ${warningMarkup()}
@@ -836,7 +850,11 @@ function syncRunnerScene(): void {
 
 function currentCorrectStreak(run: RunState): number {
   let streak = 0;
-  for (let index = run.currentIndex; index >= 0; index -= 1) {
+  const currentQuestion = run.questions[run.currentIndex];
+  const startIndex = currentQuestion?.selectedSide === null
+    ? run.currentIndex - 1
+    : run.currentIndex;
+  for (let index = startIndex; index >= 0; index -= 1) {
     const question = run.questions[index];
     if (!question || question.selectedSide === null) {
       break;
@@ -1054,7 +1072,7 @@ function answer(side: Side, inputMethod: InputMethod): void {
   );
   render();
 
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const feedbackDuration = result.correct ? 760 : 940;
   feedbackTimer = window.setTimeout(() => {
     feedbackTimer = null;
     const active = state.activeRun;
@@ -1071,7 +1089,7 @@ function answer(side: Side, inputMethod: InputMethod): void {
     feedback = null;
     inputLocked = false;
     render();
-  }, reduceMotion ? 700 : 1_000);
+  }, feedbackDuration);
 }
 
 function openParentGate(): void {
