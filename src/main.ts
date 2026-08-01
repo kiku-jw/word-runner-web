@@ -437,7 +437,7 @@ function renderFeedback(): string {
     <div class="feedback-layer" role="status" aria-live="assertive">
       <div class="feedback-card ${feedback.correct ? "feedback-correct" : "feedback-correction"}">
         <span class="feedback-reaction" aria-hidden="true">
-          ${feedback.correct ? "Є!" : "О-о"}
+          ${feedback.correct ? "Так!" : "О-о!"}
         </span>
         <span class="feedback-glyph" aria-hidden="true">${concept.glyph}</span>
         <div>
