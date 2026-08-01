@@ -32,6 +32,7 @@ import type {
   Lesson,
   PilotEventType,
   PilotState,
+  RunState,
   Side,
 } from "./types";
 
@@ -816,11 +817,14 @@ function syncRunnerScene(): void {
   const options = optionsForQuestion(CONTENT_PACK, question);
   runnerScene.sync({
     runId: run.id,
+    runSeed: run.seed,
+    questionIndex: run.currentIndex,
     id: question.id,
     leftLabel: options.left.target.en,
     rightLabel: options.right.target.en,
     selectedSide: question.selectedSide,
     correctSide: question.correctSide,
+    correctStreak: currentCorrectStreak(run),
     result:
       feedback === null
         ? null
@@ -828,6 +832,21 @@ function syncRunnerScene(): void {
           ? "correct"
           : "incorrect",
   });
+}
+
+function currentCorrectStreak(run: RunState): number {
+  let streak = 0;
+  for (let index = run.currentIndex; index >= 0; index -= 1) {
+    const question = run.questions[index];
+    if (!question || question.selectedSide === null) {
+      break;
+    }
+    if (question.selectedSide !== question.correctSide) {
+      break;
+    }
+    streak += 1;
+  }
+  return streak;
 }
 
 function currentConcept(): Concept | null {

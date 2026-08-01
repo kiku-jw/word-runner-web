@@ -36,13 +36,24 @@ const LANE_X: Record<Side, number> = { left: -2.15, right: 2.15 };
 
 export interface RunnerSceneQuestion {
   runId: string;
+  runSeed: number;
+  questionIndex: number;
   id: string;
   leftLabel: string;
   rightLabel: string;
   selectedSide: Side | null;
   correctSide: Side;
+  correctStreak: number;
   result: "correct" | "incorrect" | null;
 }
+
+export type RunnerReaction =
+  | "none"
+  | "correct"
+  | "stumble"
+  | "backpack"
+  | "gate"
+  | "rocket";
 
 export interface RunnerPerformanceSample {
   fps: number;
@@ -58,6 +69,9 @@ export interface RunnerSceneSnapshot extends RunnerPerformanceSample {
   gateZ: number;
   frameCount: number;
   reducedMotion: boolean;
+  reaction: RunnerReaction;
+  backgroundGagVisible: boolean;
+  backgroundGagQuestionIndex: number;
 }
 
 export interface RunnerSceneController {
@@ -80,14 +94,43 @@ interface RunnerRig {
   rightArm: Group;
   leftLeg: Group;
   rightLeg: Group;
+  backpack: Mesh;
+  rocketFlame: Mesh;
 }
 
 interface GateRig {
   group: Group;
+  leftLane: Group;
+  rightLane: Group;
   leftFrame: MeshStandardMaterial;
   rightFrame: MeshStandardMaterial;
   leftPanel: MeshStandardMaterial;
   rightPanel: MeshStandardMaterial;
+}
+
+interface BackgroundGagRig {
+  group: Group;
+}
+
+const INCORRECT_REACTIONS = ["stumble", "backpack", "gate"] as const;
+
+function stableHash(value: string): number {
+  let hash = 2_166_136_261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+  return hash >>> 0;
+}
+
+export function incorrectReactionForQuestionId(
+  questionId: string,
+): (typeof INCORRECT_REACTIONS)[number] {
+  return INCORRECT_REACTIONS[stableHash(questionId) % INCORRECT_REACTIONS.length] ?? "stumble";
+}
+
+export function backgroundGagQuestionIndex(runSeed: number): number {
+  return 2 + ((runSeed >>> 0) % 5);
 }
 
 export function cappedPixelRatio(
@@ -152,6 +195,20 @@ function createRunner(): RunnerRig {
   backpack.scale.set(1, 1, 0.5);
   group.add(backpack);
 
+  const rocketFlame = new Mesh(
+    new ConeGeometry(0.22, 0.78, 8),
+    new MeshStandardMaterial({
+      color: 0xffa526,
+      emissive: 0xff5a1f,
+      emissiveIntensity: 1.15,
+      roughness: 0.45,
+    }),
+  );
+  rocketFlame.position.set(0, 1.08, 0.43);
+  rocketFlame.rotation.z = Math.PI;
+  rocketFlame.visible = false;
+  group.add(rocketFlame);
+
   const head = new Mesh(new SphereGeometry(0.43, 16, 12), skin);
   head.position.y = 2.83;
   group.add(head);
@@ -198,7 +255,15 @@ function createRunner(): RunnerRig {
   shadow.scale.set(1.15, 1.7, 1);
   group.add(shadow);
 
-  return { group, leftArm, rightArm, leftLeg, rightLeg };
+  return {
+    group,
+    leftArm,
+    rightArm,
+    leftLeg,
+    rightLeg,
+    backpack,
+    rocketFlame,
+  };
 }
 
 function roundedRect(
@@ -319,9 +384,19 @@ function createGate(): GateRig {
     roughness: 0.48,
   });
 
-  group.add(createGateLane(-2.15, leftFrame, leftPanel));
-  group.add(createGateLane(2.15, rightFrame, rightPanel));
-  return { group, leftFrame, rightFrame, leftPanel, rightPanel };
+  const leftLane = createGateLane(-2.15, leftFrame, leftPanel);
+  const rightLane = createGateLane(2.15, rightFrame, rightPanel);
+  group.add(leftLane);
+  group.add(rightLane);
+  return {
+    group,
+    leftLane,
+    rightLane,
+    leftFrame,
+    rightFrame,
+    leftPanel,
+    rightPanel,
+  };
 }
 
 function replacePanelTexture(
@@ -482,6 +557,84 @@ function createFeedbackPulse(): Mesh<TorusGeometry, MeshBasicMaterial> {
   return pulse;
 }
 
+function createBackgroundGag(): BackgroundGagRig {
+  const group = new Group();
+  group.visible = false;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 256;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Canvas 2D context is unavailable.");
+  }
+  context.lineWidth = 12;
+  context.lineJoin = "round";
+  context.strokeStyle = "#14254a";
+
+  context.fillStyle = "#e44848";
+  context.beginPath();
+  context.moveTo(205, 112);
+  context.lineTo(55, 55);
+  context.lineTo(92, 205);
+  context.lineTo(224, 168);
+  context.closePath();
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = "#fff5db";
+  context.beginPath();
+  context.ellipse(277, 145, 122, 66, 0, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = "#ffd34f";
+  context.beginPath();
+  context.ellipse(260, 150, 62, 34, -0.2, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = "#fff5db";
+  context.beginPath();
+  context.arc(382, 94, 48, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = "#3193dc";
+  context.beginPath();
+  context.ellipse(395, 85, 35, 20, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = "#13213d";
+  context.beginPath();
+  context.arc(408, 82, 7, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = "#ff922f";
+  context.beginPath();
+  context.moveTo(425, 104);
+  context.lineTo(495, 121);
+  context.lineTo(426, 137);
+  context.closePath();
+  context.fill();
+  context.stroke();
+
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  texture.needsUpdate = true;
+  const bird = new Mesh(
+    new PlaneGeometry(2.4, 1.2),
+    new MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+    }),
+  );
+  group.add(bird);
+  group.scale.setScalar(1.2);
+  return { group };
+}
+
 function disposeScene(scene: Scene): void {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<MeshBasicMaterial | MeshStandardMaterial | PointsMaterial>();
@@ -506,7 +659,10 @@ function disposeScene(scene: Scene): void {
     geometry.dispose();
   }
   for (const material of materials) {
-    if (material instanceof MeshStandardMaterial) {
+    if (
+      material instanceof MeshStandardMaterial ||
+      material instanceof MeshBasicMaterial
+    ) {
       material.map?.dispose();
     }
     material.dispose();
@@ -571,6 +727,8 @@ export function createRunnerScene(
   scene.add(speedLines);
   const pulse = createFeedbackPulse();
   scene.add(pulse);
+  const backgroundGag = createBackgroundGag();
+  scene.add(backgroundGag.group);
 
   let visible = false;
   let disposed = false;
@@ -579,6 +737,11 @@ export function createRunnerScene(
   let selectedSide: Side | null = null;
   let result: RunnerSceneQuestion["result"] = null;
   let correctSide: Side = "left";
+  let activeReaction: RunnerReaction = "none";
+  let incorrectReaction: (typeof INCORRECT_REACTIONS)[number] = "stumble";
+  let scheduledBackgroundGagQuestionIndex = backgroundGagQuestionIndex(0);
+  let backgroundGagActive = false;
+  let backgroundGagAge = 0;
   let targetLaneX = 0;
   let gateZ = -42;
   let lastTime = 0;
@@ -680,6 +843,42 @@ export function createRunnerScene(
     runner.leftArm.rotation.z = -0.12;
     runner.rightArm.rotation.z = 0.12;
     runner.group.rotation.z = 0;
+    runner.group.position.z = 3.4;
+    runner.backpack.position.set(0, 1.69, 0.38);
+    runner.backpack.rotation.set(0, 0, 0);
+    runner.rocketFlame.visible = false;
+    runner.rocketFlame.position.set(0, 1.08, 0.43);
+    runner.rocketFlame.scale.setScalar(1);
+    gate.leftLane.position.y = 0;
+    gate.rightLane.position.y = 0;
+    gate.leftLane.rotation.z = 0;
+    gate.rightLane.rotation.z = 0;
+
+    if (backgroundGagActive) {
+      backgroundGagAge += delta;
+      if (backgroundGagAge >= 1.85) {
+        backgroundGagActive = false;
+        backgroundGag.group.visible = false;
+      }
+    }
+    if (backgroundGagActive) {
+      backgroundGag.group.visible = true;
+      if (reducedMotion) {
+        backgroundGag.group.position.set(-5.6, 4.75, -12.2);
+        backgroundGag.group.rotation.z = -0.16;
+      } else {
+        const progress = Math.min(1, backgroundGagAge / 1.45);
+        backgroundGag.group.position.set(
+          MathUtils.lerp(-7.6, 7.4, progress),
+          4.6 + Math.sin(progress * Math.PI) * 1.35,
+          -12.2 + Math.cos(progress * Math.PI) * 0.8,
+        );
+        backgroundGag.group.rotation.z =
+          Math.sin(progress * Math.PI * 3.4) * 0.14;
+      }
+    } else {
+      backgroundGag.group.visible = false;
+    }
 
     if (selectedSide !== null && result !== null) {
       pulseAge += delta;
@@ -688,15 +887,53 @@ export function createRunnerScene(
     const reactionWave = reducedMotion ? 0 : Math.sin(reactionProgress * Math.PI);
     let reactionY = 0;
     if (result === "correct" && reactionProgress < 1) {
-      reactionY = reactionWave * 0.34;
-      runner.leftArm.rotation.z -= reactionWave * 1.6;
-      runner.rightArm.rotation.z += reactionWave * 1.6;
+      const rocketBoost = activeReaction === "rocket";
+      reactionY = rocketBoost
+        ? reducedMotion
+          ? 1.05
+          : reactionWave * 1.75
+        : reactionWave * 0.34;
+      runner.leftArm.rotation.z -= reactionWave * (rocketBoost ? 1.9 : 1.6);
+      runner.rightArm.rotation.z += reactionWave * (rocketBoost ? 1.9 : 1.6);
+      if (rocketBoost) {
+        runner.group.position.z += reactionWave * 0.12;
+        runner.backpack.position.y -= reactionWave * 0.07;
+        runner.backpack.rotation.z =
+          Math.sin(reactionProgress * Math.PI * 10) * (1 - reactionProgress) * 0.12;
+        runner.rocketFlame.visible = true;
+        runner.rocketFlame.position.z = 0.43 + reactionWave * 0.08;
+        runner.rocketFlame.scale.setScalar(
+          reducedMotion ? 1.35 : 0.82 + reactionWave * 0.95,
+        );
+      }
     } else if (result === "incorrect" && reactionProgress < 1) {
       reactionY = -reactionWave * 0.08;
-      runner.group.rotation.z =
-        Math.sin(reactionProgress * Math.PI * 3) * (1 - reactionProgress) * 0.2;
-      runner.leftArm.rotation.z -= reactionWave * 0.48;
-      runner.rightArm.rotation.z += reactionWave * 0.32;
+      if (activeReaction === "stumble") {
+        runner.group.rotation.z =
+          Math.sin(reactionProgress * Math.PI * 3) * (1 - reactionProgress) * 0.2;
+        runner.group.position.z -= reactionWave * 0.22;
+        runner.leftArm.rotation.z -= reactionWave * 0.48;
+        runner.rightArm.rotation.z += reactionWave * 0.32;
+      } else if (activeReaction === "backpack") {
+        reactionY = -reactionWave * 0.04;
+        runner.group.rotation.z =
+          Math.sin(reactionProgress * Math.PI * 2.6) * (1 - reactionProgress) * 0.09;
+        runner.backpack.position.y += reactionWave * 0.24;
+        runner.backpack.rotation.z =
+          Math.sin(reactionProgress * Math.PI * 8) * (1 - reactionProgress) * 0.4;
+        runner.leftArm.rotation.z += reactionWave * 0.12;
+        runner.rightArm.rotation.z -= reactionWave * 0.08;
+      } else if (activeReaction === "gate" && selectedSide !== null) {
+        const chosenGate = selectedSide === "left" ? gate.leftLane : gate.rightLane;
+        chosenGate.position.y += reactionWave * 0.26;
+        chosenGate.rotation.z =
+          Math.sin(reactionProgress * Math.PI * 4) *
+          (1 - reactionProgress) *
+          0.16 *
+          (selectedSide === "left" ? -1 : 1);
+        runner.leftArm.rotation.z -= reactionWave * 0.2;
+        runner.rightArm.rotation.z += reactionWave * 0.2;
+      }
     }
     runner.group.position.y =
       0.04 +
@@ -762,13 +999,20 @@ export function createRunnerScene(
       questionId = null;
       selectedSide = null;
       result = null;
+      activeReaction = "none";
+      backgroundGagActive = false;
       targetLaneX = 0;
       gate.group.visible = false;
+      pulse.visible = false;
+      backgroundGag.group.visible = false;
     },
 
     sync(question) {
       if (question.runId !== performanceRunId) {
         performanceRunId = question.runId;
+        scheduledBackgroundGagQuestionIndex = backgroundGagQuestionIndex(
+          question.runSeed,
+        );
         performanceReported = false;
         sampleElapsed = 0;
         sampleFrames = 0;
@@ -779,6 +1023,11 @@ export function createRunnerScene(
         selectedSide = null;
         result = null;
         correctSide = question.correctSide;
+        incorrectReaction = incorrectReactionForQuestionId(question.id);
+        activeReaction = "none";
+        backgroundGagActive =
+          question.questionIndex === scheduledBackgroundGagQuestionIndex;
+        backgroundGagAge = 0;
         targetLaneX = 0;
         gateZ = -42;
         gate.group.visible = true;
@@ -791,6 +1040,14 @@ export function createRunnerScene(
         selectedSide = question.selectedSide;
         result = question.result;
         correctSide = question.correctSide;
+        activeReaction =
+          selectedSide === null || result === null
+            ? "none"
+            : result === "incorrect"
+              ? incorrectReaction
+              : question.correctStreak === 3
+                ? "rocket"
+                : "correct";
         targetLaneX = selectedSide === null ? 0 : LANE_X[selectedSide];
         setFrameResult();
         if (selectedSide !== null && result !== null) {
@@ -807,6 +1064,10 @@ export function createRunnerScene(
         ready: !disposed,
         visible,
         questionId,
+        reaction:
+          selectedSide !== null && result !== null ? activeReaction : "none",
+        backgroundGagVisible: backgroundGagActive,
+        backgroundGagQuestionIndex: scheduledBackgroundGagQuestionIndex,
         lane:
           Math.abs(runner.group.position.x) < 0.25
             ? "center"

@@ -87,6 +87,103 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
   expect(settledSnapshot?.gateZ).toBeGreaterThan(-18);
 });
 
+test("adds one deterministic background gag and a playful wrong-answer reaction", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Тварини");
+  await finishReview(page);
+
+  const gagQuestionIndex = await page.evaluate(
+    () => window.__WORD_RUNNER_3D__?.snapshot()?.backgroundGagQuestionIndex ?? -1,
+  );
+  expect(gagQuestionIndex).toBeGreaterThanOrEqual(2);
+  expect(gagQuestionIndex).toBeLessThanOrEqual(6);
+
+  while ((await readPilotState(page)).activeRun?.currentIndex !== gagQuestionIndex) {
+    await answerCurrentQuestion(page);
+  }
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.backgroundGagVisible ?? false),
+    )
+    .toBe(true);
+  await page.evaluate(
+    () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve())),
+  );
+  const gagSnapshot = await page.evaluate(() =>
+    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
+  );
+  expect(gagSnapshot?.drawCalls).toBeLessThan(100);
+
+  const runState = await readPilotState(page);
+  const question = runState.activeRun?.questions[runState.activeRun.currentIndex];
+  expect(question).toBeTruthy();
+  const wrongSide = question?.correctSide === "left" ? "right" : "left";
+  const wrongReaction = await page
+    .locator(`[data-side="${wrongSide}"]`)
+    .evaluate((button) => {
+      (button as HTMLButtonElement).click();
+      return window.__WORD_RUNNER_3D__?.snapshot()?.reaction ?? "none";
+    });
+
+  expect(wrongReaction).toMatch(/stumble|backpack|gate/);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as typeof window & {
+              __mistakeToneStarts: number;
+            }
+          ).__mistakeToneStarts,
+      ),
+    )
+    .toBe(1);
+
+  await expect
+    .poll(async () => (await readPilotState(page)).activeRun?.currentIndex ?? -1)
+    .toBe(gagQuestionIndex + 1);
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.backgroundGagVisible ?? false),
+    )
+    .toBe(false);
+});
+
+test("fires the rocket backpack only on the third consecutive correct answer", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await acceptNotice(page);
+  await openLesson(page, "Їжа й напої");
+  await finishReview(page);
+
+  const expectedReactions = ["correct", "correct", "rocket", "correct"] as const;
+  for (const [index, expectedReaction] of expectedReactions.entries()) {
+    const runState = await readPilotState(page);
+    const activeRun = runState.activeRun;
+    const question = activeRun?.questions[activeRun.currentIndex];
+    expect(question).toBeTruthy();
+
+    const reaction = await page
+      .locator(`[data-side="${question?.correctSide}"]`)
+      .evaluate((button) => {
+        (button as HTMLButtonElement).click();
+        return window.__WORD_RUNNER_3D__?.snapshot()?.reaction ?? "none";
+      });
+    expect(reaction).toBe(expectedReaction);
+
+    if (index < expectedReactions.length - 1) {
+      await expect
+        .poll(async () => (await readPilotState(page)).activeRun?.currentIndex ?? -1)
+        .toBe((activeRun?.currentIndex ?? 0) + 1);
+    }
+  }
+});
+
 test("guides a child from lesson review through ten gates to the result screen", async ({
   page,
 }) => {
