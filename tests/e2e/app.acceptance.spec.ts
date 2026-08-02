@@ -59,6 +59,16 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
       page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.view ?? null),
     )
     .toBe("front");
+  const idleStart = await page.evaluate(() =>
+    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
+  );
+  await page.waitForTimeout(220);
+  const idleEnd = await page.evaluate(() =>
+    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
+  );
+  expect(idleEnd?.frameCount).toBeGreaterThan(idleStart?.frameCount ?? 0);
+  expect(idleEnd?.worldSpeed).toBe(0);
+  expect(idleEnd?.worldTravel).toBe(idleStart?.worldTravel);
 
   await page.getByRole("button", { name: "Грати" }).click();
   await expect(page.getByTestId("game-stage")).toBeVisible();
@@ -74,7 +84,19 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
   expect(snapshot?.questionId).not.toBeNull();
   expect(snapshot?.drawCalls).toBeLessThan(100);
   expect(snapshot?.pixelRatio).toBeLessThanOrEqual(1.25);
+  expect(snapshot?.gateZ).toBeLessThan(-28);
 
+  const approachStart = snapshot;
+  await page.waitForTimeout(700);
+  const approachEnd = await page.evaluate(() =>
+    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
+  );
+  const gateTravel = (approachEnd?.gateZ ?? 0) - (approachStart?.gateZ ?? 0);
+  const worldTravel =
+    (approachEnd?.worldTravel ?? 0) - (approachStart?.worldTravel ?? 0);
+  expect(gateTravel).toBeGreaterThan(0);
+  expect(Math.abs(gateTravel - worldTravel)).toBeLessThanOrEqual(0.2);
+  expect(approachEnd?.gateZ).toBeLessThan(-24);
 });
 
 test("offers three open levels with separate content and a next-level challenge", async ({
@@ -307,9 +329,7 @@ test("turns a correct lane choice into a physical gate opening without a modal p
         pointerEvents: getComputedStyle(feedbackElement).pointerEvents,
       };
       await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(() => resolve());
-        });
+        window.setTimeout(resolve, 80);
       });
       return {
         ...layout,
@@ -322,16 +342,8 @@ test("turns a correct lane choice into a physical gate opening without a modal p
   );
   expect(feedbackLayout!.pointerEvents).toBe("none");
   expect(feedbackLayout!.scene?.gateResponse).toMatch(/opening|cleared/);
+  expect(feedbackLayout!.scene?.doorOpen).toBeGreaterThan(0);
   expect(feedbackLayout!.scene?.drawCalls).toBeLessThan(100);
-  await expect
-    .poll(
-      () =>
-        page.evaluate(
-          () => window.__WORD_RUNNER_3D__?.snapshot()?.doorOpen ?? 0,
-        ),
-      { timeout: 1_000, intervals: [16, 32, 64] },
-    )
-    .toBeGreaterThan(0);
 });
 
 test("adds one deterministic background gag and a playful wrong-answer reaction", async ({
@@ -377,6 +389,21 @@ test("adds one deterministic background gag and a playful wrong-answer reaction"
     });
 
   expect(wrongReaction).toMatch(/stumble|backpack|gate/);
+  const blockedStart = await page.evaluate(async () => {
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => resolve());
+      });
+    });
+    return window.__WORD_RUNNER_3D__?.snapshot() ?? null;
+  });
+  await page.waitForTimeout(80);
+  const blockedEnd = await page.evaluate(() =>
+    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
+  );
+  expect(blockedStart?.worldSpeed).toBe(0);
+  expect(blockedEnd?.gateZ).toBe(blockedStart?.gateZ);
+  expect(blockedEnd?.worldTravel).toBe(blockedStart?.worldTravel);
   await expect
     .poll(() =>
       page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.gateResponse),
@@ -386,7 +413,7 @@ test("adds one deterministic background gag and a playful wrong-answer reaction"
     .poll(() =>
       page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.worldSpeed ?? 99),
     )
-    .toBeLessThan(3.2);
+    .toBe(0);
   await expect
     .poll(() =>
       page.evaluate(

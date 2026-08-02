@@ -8,7 +8,9 @@ three-level progression tracked in
 start-menu/timeout follow-up tracked in
 [GitHub Issue #5](https://github.com/kiku-jw/word-runner-web/issues/5). Explicit
 saved-run recovery and the optional review path are tracked in
-[GitHub Issue #6](https://github.com/kiku-jw/word-runner-web/issues/6).
+[GitHub Issue #6](https://github.com/kiku-jw/word-runner-web/issues/6), and the
+grounded world/gate motion follow-up is tracked in
+[GitHub Issue #7](https://github.com/kiku-jw/word-runner-web/issues/7).
 
 Public demo: [https://kiku-jw.github.io/word-runner-web/](https://kiku-jw.github.io/word-runner-web/).
 
@@ -102,6 +104,11 @@ usage analytics and do not prove learning efficacy.
   runner reaches it, while a wrong lane stays closed, absorbs the approach, and
   triggers a gentle recoil. Lateral velocity drives runner lean, and a correct
   streak modestly increases world speed without adding an economy.
+- Attract mode keeps the track and environment stationary while the front-facing
+  runner waves. During play, gates share the environment's world displacement,
+  begin farther away, and ease the whole scene to a stop near the decision zone.
+  A wrong answer freezes forward motion and the running cycle during recoil;
+  the gate no longer accelerates independently into the runner.
 - Correction is a short, non-modal track overlay. It never dims the scene or
   intercepts input, while the DOM still owns readable word pairing and live
   status semantics.
