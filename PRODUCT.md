@@ -13,10 +13,10 @@ validation session and can inspect or export browser-local pilot metrics.
 ## Product Purpose
 
 Test whether a short two-lane vocabulary runner is understandable and engaging
-enough that children voluntarily replay it. The prototype trains recall of
-previously introduced words; it does not claim to teach vocabulary by itself.
-The current product decision is to make the runner interaction physically
-satisfying before expanding content, platforms, or monetization.
+enough that children voluntarily replay it and choose a harder vocabulary
+level. The prototype trains recall of previously introduced words; it does not
+claim to teach vocabulary by itself. The current product decision is to test
+visible depth with three open levels before expanding platforms or monetization.
 
 ## Brand Personality
 
@@ -43,6 +43,8 @@ separate quiz screen.
   more than several decorative gags.
 - Preserve one-thumb play, large semantic DOM targets, offline operation, and a
   quiet parent-controlled sound path.
+- Make challenge visible but optional: harder vocabulary and a quicker visual
+  pace, with no locked levels, lives, or failure penalty.
 - Treat voluntary replay as the engagement signal; treat learning efficacy and
   delayed retention as separate experiments.
 
@@ -56,5 +58,5 @@ force a restart. Audio remains optional and never owns essential information.
 ## Lifecycle
 
 This is a live product contract derived from the approved prototype PRD,
-supervised feedback, and GitHub Issue #2. Update it only when the target user,
+supervised feedback, and GitHub Issues #2 and #4. Update it only when the target user,
 validation purpose, product personality, or strategic design principles change.

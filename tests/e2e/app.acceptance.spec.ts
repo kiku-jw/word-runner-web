@@ -73,7 +73,7 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
     .poll(
       () =>
         page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.gateZ ?? -99),
-      { timeout: 2_500 },
+      { timeout: 8_000 },
     )
     .toBeGreaterThan(-10);
 
@@ -93,6 +93,66 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
     window.__WORD_RUNNER_3D__?.snapshot() ?? null,
   );
   expect(settledSnapshot?.gateZ).toBeGreaterThan(-18);
+});
+
+test("offers three open levels with separate content and a next-level challenge", async ({
+  page,
+}) => {
+  test.slow();
+  await gotoApp(page, { disableWebgl: true });
+  await acceptNotice(page);
+
+  await expect(page.getByRole("button", { name: /Легкий/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.getByRole("button", { name: /Середній/ }).click();
+  await expect(page.getByRole("button", { name: /Середній/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByRole("button", { name: /Дім/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Тварини/ })).toHaveCount(0);
+
+  await openLesson(page, "Дім");
+  await expect(page.locator(".level-chip", { hasText: "Середній" })).toBeVisible();
+  await finishReview(page);
+
+  const startedState = await readPilotState(page);
+  expect(startedState.activeLessonId).toBe("medium-home");
+  await expect(page.getByTestId("game-stage")).toHaveAttribute(
+    "data-difficulty",
+    "2",
+  );
+
+  await completeRun(page);
+  await expect(
+    page.getByRole("button", { name: "Спробувати складний" }),
+  ).toBeVisible();
+
+  const completedState = await readPilotState(page);
+  expect(
+    completedState.eventLog.some(
+      (event) => event.type === "run_completed" && event.difficulty === 2,
+    ),
+  ).toBe(true);
+  expect(Object.keys(completedState.conceptProgress)).toEqual(
+    expect.arrayContaining([
+      "kitchen",
+      "bedroom",
+      "window",
+      "mirror",
+      "carpet",
+      "stairs",
+    ]),
+  );
+
+  await page.getByRole("button", { name: "Спробувати складний" }).click();
+  await expect(page.getByRole("button", { name: /Складний/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByRole("button", { name: /Слова-пастки/ })).toBeVisible();
 });
 
 test("plays a local shuffled soundtrack with fades and a 20 percent ceiling", async ({

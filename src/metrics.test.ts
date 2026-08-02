@@ -17,6 +17,7 @@ function event(overrides: Partial<PilotEvent>): PilotEvent {
     selectedSide: overrides.selectedSide ?? null,
     correct: overrides.correct ?? null,
     rating: overrides.rating ?? null,
+    difficulty: overrides.difficulty ?? null,
     inputMethod: overrides.inputMethod ?? null,
     fps: overrides.fps ?? null,
     drawCalls: overrides.drawCalls ?? null,
@@ -56,7 +57,13 @@ describe("summarizeMetrics", () => {
         selectedSide: "right",
         correct: false,
       }),
-      event({ id: "e4", type: "run_completed", timestamp: "2026-07-30T09:03:00.000Z", runId: "run-1" }),
+      event({
+        id: "e4",
+        type: "run_completed",
+        timestamp: "2026-07-30T09:03:00.000Z",
+        runId: "run-1",
+        difficulty: 1,
+      }),
       event({ id: "e5", type: "replay_started", timestamp: "2026-07-30T09:04:00.000Z", runId: "run-2" }),
       event({ id: "start-2", type: "run_started", runId: "run-2" }),
       event({ id: "fps-1", type: "render_sampled", runId: "run-1", fps: 57 }),
@@ -108,6 +115,7 @@ describe("summarizeMetrics", () => {
       runsStarted: 2,
       laneInputs: 1,
       medianFps: 54,
+      runsByDifficulty: { 1: 1, 2: 0, 3: 0 },
     });
   });
 });

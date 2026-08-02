@@ -28,7 +28,7 @@ import {
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
-import type { Side } from "./types";
+import type { Difficulty, Side } from "./types";
 
 const TRACK_SEGMENT_LENGTH = 12;
 const TRACK_SEGMENT_COUNT = 11;
@@ -45,6 +45,7 @@ export interface RunnerSceneQuestion {
   selectedSide: Side | null;
   correctSide: Side;
   correctStreak: number;
+  difficulty: Difficulty;
   result: "correct" | "incorrect" | null;
 }
 
@@ -77,6 +78,7 @@ export interface RunnerSceneSnapshot extends RunnerPerformanceSample {
   worldSpeed: number;
   backgroundGagVisible: boolean;
   backgroundGagQuestionIndex: number;
+  difficulty: Difficulty;
 }
 
 export interface RunnerSceneController {
@@ -148,6 +150,13 @@ export function cappedPixelRatio(
     ? Math.max(1, devicePixelRatio)
     : 1;
   return Math.min(safeRatio, compactViewport ? 1.25 : 1.5);
+}
+
+export function baseWorldSpeedForDifficulty(
+  difficulty: Difficulty,
+  reducedMotion: boolean,
+): number {
+  return reducedMotion ? 3.2 : 8.8 + (difficulty - 1) * 0.8;
 }
 
 function createLimb(
@@ -763,6 +772,7 @@ export function createRunnerScene(
   let gateResponse: RunnerSceneSnapshot["gateResponse"] = "approaching";
   let doorOpen = 0;
   let currentCorrectStreak = 0;
+  let currentDifficulty: Difficulty = 1;
   let currentWorldSpeed = 8.8;
   let lastTime = 0;
   let elapsed = 0;
@@ -827,7 +837,9 @@ export function createRunnerScene(
     const streakBoost = reducedMotion ? 0 : Math.min(currentCorrectStreak, 4) * 0.48;
     const answerBoost = result === "correct" ? reactionEnergy * 2.4 : 0;
     const wrongBrake = result === "incorrect" ? reactionEnergy * 5.2 : 0;
-    const baseWorldSpeed = reducedMotion ? 3.2 : 8.8 + streakBoost;
+    const baseWorldSpeed =
+      baseWorldSpeedForDifficulty(currentDifficulty, reducedMotion) +
+      streakBoost;
     currentWorldSpeed = Math.max(reducedMotion ? 1.7 : 4.2, baseWorldSpeed + answerBoost - wrongBrake);
     const worldSpeed = currentWorldSpeed;
     for (const marker of trackMarkers) {
@@ -855,7 +867,8 @@ export function createRunnerScene(
 
     if (selectedSide === null) {
       // Keep the decision cadence stable while reducing only decorative motion.
-      gateZ = Math.min(-6.8, gateZ + 14 * delta);
+      const approachSpeed = 14 + (currentDifficulty - 1) * 1.5;
+      gateZ = Math.min(-6.8, gateZ + approachSpeed * delta);
       gateResponse = "approaching";
     } else if (result === "incorrect") {
       gateZ = Math.min(1.55, gateZ + (reducedMotion ? 16 : 22) * delta);
@@ -1081,6 +1094,7 @@ export function createRunnerScene(
       gateResponse = "approaching";
       doorOpen = 0;
       currentCorrectStreak = 0;
+      currentDifficulty = 1;
       backgroundGagActive = false;
       targetLaneX = 0;
       gate.group.visible = false;
@@ -1089,6 +1103,7 @@ export function createRunnerScene(
     },
 
     sync(question) {
+      currentDifficulty = question.difficulty;
       if (question.runId !== performanceRunId) {
         performanceRunId = question.runId;
         scheduledBackgroundGagQuestionIndex = backgroundGagQuestionIndex(
@@ -1163,6 +1178,7 @@ export function createRunnerScene(
         worldSpeed: Math.round(currentWorldSpeed * 10) / 10,
         backgroundGagVisible: backgroundGagActive,
         backgroundGagQuestionIndex: scheduledBackgroundGagQuestionIndex,
+        difficulty: currentDifficulty,
         lane:
           Math.abs(runner.group.position.x) < 0.25
             ? "center"

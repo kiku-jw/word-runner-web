@@ -20,7 +20,7 @@ intent, or native-app viability.
 - One-tap quick start into the default lesson, plus an optional lesson picker
   and six-card review flow.
 - Ukrainian child-facing UI with tap, swipe, and keyboard lane controls.
-- Four lessons, six concepts per lesson, 24 total concepts.
+- Three open difficulty levels, four lessons per level, and 72 total concepts.
 - Six-card review before the first run for each lesson.
 - Ten-question runs with immediate correction and replay support.
 - Four local background tracks in a shuffled, fading playlist at 20% volume.
@@ -71,7 +71,8 @@ Open the local Vite URL that the command prints.
   summary.
 - `src/music.ts` owns the browser-native shuffled playlist, fades, mute state,
   speech ducking, and page-visibility pause.
-- `src/content.ts` defines the four lessons and 24 prototype-reviewed concepts.
+- `src/content.ts` defines 12 lessons and 72 prototype-status concepts across
+  three difficulty levels.
 - `public/assets/track-carpathians.webp` and `public/assets/runner.webp` remain
   generated original assets for menus and the WebGL fallback. Their provenance
   is documented with the user-supplied soundtrack in
@@ -79,12 +80,16 @@ Open the local Vite URL that the command prints.
 
 ## Content model
 
-The current content pack is `Українська → English` and contains these lessons:
+The current content pack is `Українська → English` and contains four six-word
+lessons at each level:
 
-- `Тварини`
-- `Їжа й напої`
-- `Транспорт`
-- `Природа`
+- Easy: `Тварини`, `Їжа й напої`, `Транспорт`, `Природа`.
+- Medium: `Дім`, `Школа`, `Тіло`, `Дії`.
+- Hard: `Характер`, `Дика природа`, `Сильні дієслова`, `Слова-пастки`.
+
+All levels remain open. Existing Easy concept IDs are unchanged, so older
+browser-local progress remains valid. A run with at least 8 correct answers can
+suggest the next level without locking replay or other content.
 
 Each concept uses:
 
@@ -95,9 +100,9 @@ Each concept uses:
   preferring high-quality local Apple, Google, or Microsoft English voices;
 - lesson-scoped distractor IDs.
 
-The content is prototype-reviewed, not final educational copy. The soundtrack
-is not a per-concept pronunciation pack; future concept-specific images or
-audio still require separate provenance review.
+The content is prototype copy, not final educational copy or a human bilingual
+review. The soundtrack is not a per-concept pronunciation pack; future
+concept-specific images or audio still require separate provenance review.
 
 ## Local metrics
 
@@ -116,6 +121,7 @@ The adult metrics screen summarizes only browser-local events:
 - `averageEnjoyment` - mean child rating from 1 to 5, rounded to one decimal.
 - `medianFps` - median of one local renderer sample per run when WebGL is
   active; it is a technical diagnostic, not remote analytics.
+- completed runs by Easy, Medium, and Hard level.
 - `lastActivityAt` - timestamp of the latest logged event.
 
 The export action writes the current participant ID, concept progress, and full

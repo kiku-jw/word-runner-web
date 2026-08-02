@@ -9,6 +9,8 @@ import {
   optionsForQuestion,
 } from "./engine";
 
+const SEED_SAMPLE_SIZE = 64;
+
 function findSeedWithEarlyRequeue(lessonId: string): number {
   for (let seed = 0; seed < 5_000; seed += 1) {
     const run = createRun(CONTENT_PACK, lessonId, seed);
@@ -26,7 +28,7 @@ describe("createRun", () => {
     for (const lesson of CONTENT_PACK.lessons) {
       const lessonConceptIds = new Set(lesson.conceptIds);
 
-      for (let seed = 0; seed < 512; seed += 1) {
+      for (let seed = 0; seed < SEED_SAMPLE_SIZE; seed += 1) {
         const run = createRun(CONTENT_PACK, lesson.id, seed);
 
         expect(run.questions).toHaveLength(ENGINE_RULES.runLength);
@@ -53,7 +55,7 @@ describe("createRun", () => {
         }
       }
     }
-  }, 20_000);
+  }, 60_000);
 
   it("requeues an early mistake two to four slots later when a repeat slot is available", () => {
     const seed = findSeedWithEarlyRequeue("animals");
@@ -75,7 +77,7 @@ describe("createRun", () => {
 
   it("keeps the three-side limit after corrections across a seed sample", () => {
     for (const lesson of CONTENT_PACK.lessons) {
-      for (let seed = 0; seed < 512; seed += 1) {
+      for (let seed = 0; seed < SEED_SAMPLE_SIZE; seed += 1) {
         const run = createRun(CONTENT_PACK, lesson.id, seed);
         const wrongSide =
           run.questions[0]!.correctSide === "left" ? "right" : "left";

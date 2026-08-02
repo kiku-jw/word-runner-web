@@ -2,7 +2,9 @@
 
 Canonical execution: [GitHub Issue #2](https://github.com/kiku-jw/word-runner-web/issues/2),
 with the soundtrack follow-up tracked in
-[GitHub Issue #3](https://github.com/kiku-jw/word-runner-web/issues/3).
+[GitHub Issue #3](https://github.com/kiku-jw/word-runner-web/issues/3) and the
+three-level progression tracked in
+[GitHub Issue #4](https://github.com/kiku-jw/word-runner-web/issues/4).
 
 Public demo: [https://kiku-jw.github.io/word-runner-web/](https://kiku-jw.github.io/word-runner-web/).
 
@@ -25,8 +27,20 @@ engineering evidence, not a promise for every pilot device.
 
 ## Content and audio
 
-The current content pack contains four lessons and 24 prototype-reviewed
-concepts. Concept cards use emoji glyphs, not a per-concept image bundle, and
+The current content pack contains three open difficulty levels with four
+six-word lessons per level: 12 lessons and 72 prototype-status concepts in
+total. Easy retains the original concept and lesson IDs, so the version 1 local
+storage contract accepts existing saves without migration. Medium and Hard use
+new IDs, which also keeps concept progress naturally separate. The active level
+picker is transient UI state derived from the selected lesson; no second
+progress store or unlock state exists. A score of at least 8/10 offers the next
+level without blocking any content.
+
+The 48 new Medium and Hard concepts remain draft educational copy. Human
+bilingual review is required before supervised child testing or any learning
+claim.
+
+Concept cards use emoji glyphs, not a per-concept image bundle, and
 pronunciation uses browser speech synthesis when available. Voice selection
 prefers local English voices, then enhanced Apple voices such as Ava or
 Samantha, with system Google and Microsoft voices as fallbacks. It does not
@@ -44,10 +58,10 @@ while the document is hidden and makes no remote audio request.
 
 Gameplay events stay only in the current browser unless an adult explicitly
 exports them. In addition to completion, accuracy, replay, return, and enjoyment,
-the log records run starts, accepted control method, and one renderer sample per
-run. The metrics view can export JSON or reset local state. These records support
-a supervised pilot. They are not public usage analytics and do not prove
-learning efficacy.
+the log records run starts, the selected difficulty, accepted control method,
+and one renderer sample per run. The metrics view can export JSON or reset
+local state. These records support a supervised pilot. They are not public
+usage analytics and do not prove learning efficacy.
 
 ## Visual direction
 

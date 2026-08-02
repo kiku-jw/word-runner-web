@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   backgroundGagQuestionIndex,
+  baseWorldSpeedForDifficulty,
   cappedPixelRatio,
   incorrectReactionForQuestionId,
 } from "./scene3d";
@@ -15,6 +16,20 @@ describe("cappedPixelRatio", () => {
   it("normalizes missing and sub-one ratios", () => {
     expect(cappedPixelRatio(Number.NaN, true)).toBe(1);
     expect(cappedPixelRatio(0.5, false)).toBe(1);
+  });
+});
+
+describe("baseWorldSpeedForDifficulty", () => {
+  it("raises the visual pace by level without changing reduced-motion speed", () => {
+    expect(baseWorldSpeedForDifficulty(1, false)).toBeLessThan(
+      baseWorldSpeedForDifficulty(2, false),
+    );
+    expect(baseWorldSpeedForDifficulty(2, false)).toBeLessThan(
+      baseWorldSpeedForDifficulty(3, false),
+    );
+    expect(baseWorldSpeedForDifficulty(1, true)).toBe(
+      baseWorldSpeedForDifficulty(3, true),
+    );
   });
 });
 

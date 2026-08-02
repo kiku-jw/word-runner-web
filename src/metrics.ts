@@ -1,5 +1,6 @@
 import type {
   ConceptProgress,
+  Difficulty,
   InputMethod,
   PilotEvent,
   PilotEventType,
@@ -19,6 +20,7 @@ export interface EventDetails {
   fps?: number;
   drawCalls?: number;
   pixelRatio?: number;
+  difficulty?: Difficulty;
 }
 
 export function createPilotEvent(
@@ -44,6 +46,7 @@ export function createPilotEvent(
     selectedSide: details.selectedSide ?? null,
     correct: details.correct ?? null,
     rating: details.rating ?? null,
+    difficulty: details.difficulty ?? null,
     inputMethod: details.inputMethod ?? null,
     fps: details.fps ?? null,
     drawCalls: details.drawCalls ?? null,
@@ -93,6 +96,7 @@ export interface MetricSummary {
   runsStarted: number;
   laneInputs: number;
   medianFps: number | null;
+  runsByDifficulty: Record<Difficulty, number>;
 }
 
 function median(values: readonly number[]): number | null {
@@ -163,5 +167,16 @@ export function summarizeMetrics(events: readonly PilotEvent[]): MetricSummary {
     runsStarted: events.filter((event) => event.type === "run_started").length,
     laneInputs: events.filter((event) => event.type === "lane_selected").length,
     medianFps: median(fpsSamples),
+    runsByDifficulty: {
+      1: events.filter(
+        (event) => event.type === "run_completed" && event.difficulty === 1,
+      ).length,
+      2: events.filter(
+        (event) => event.type === "run_completed" && event.difficulty === 2,
+      ).length,
+      3: events.filter(
+        (event) => event.type === "run_completed" && event.difficulty === 3,
+      ).length,
+    },
   };
 }

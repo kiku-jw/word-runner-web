@@ -167,7 +167,8 @@ export function validateContentPack(pack: ContentPack): string[] {
       !lesson.id.trim() ||
       !lesson.title.trim() ||
       !lesson.subtitle.trim() ||
-      !lesson.glyph.trim()
+      !lesson.glyph.trim() ||
+      ![1, 2, 3].includes(lesson.difficulty)
     ) {
       errors.push(`Lesson ${lesson.id || "(missing id)"} has invalid metadata.`);
     }
@@ -193,6 +194,11 @@ export function validateContentPack(pack: ContentPack): string[] {
       }
       usedConceptIds.add(conceptId);
       const concept = conceptById(pack, conceptId);
+      if (concept.difficulty !== lesson.difficulty) {
+        errors.push(
+          `Concept ${conceptId} difficulty does not match lesson ${lesson.id}.`,
+        );
+      }
       const normalizedTarget = concept.target.en.trim().toLocaleLowerCase("en");
       if (targetWords.has(normalizedTarget)) {
         errors.push(`Lesson ${lesson.id} has duplicate target words.`);
@@ -208,8 +214,18 @@ export function validateContentPack(pack: ContentPack): string[] {
     }
   }
 
-  if (pack.lessons.length !== 4 || pack.concepts.length !== 24) {
-    errors.push("The pilot pack must contain four lessons and 24 concepts.");
+  for (const difficulty of [1, 2, 3] as const) {
+    const levelLessons = pack.lessons.filter(
+      (lesson) => lesson.difficulty === difficulty,
+    );
+    const levelConcepts = pack.concepts.filter(
+      (concept) => concept.difficulty === difficulty,
+    );
+    if (levelLessons.length !== 4 || levelConcepts.length !== 24) {
+      errors.push(
+        `Difficulty ${difficulty} must contain four lessons and 24 concepts.`,
+      );
+    }
   }
   if (usedConceptIds.size !== pack.concepts.length) {
     errors.push("Every concept must belong to exactly one lesson.");

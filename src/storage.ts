@@ -72,6 +72,16 @@ function isOptionalFiniteNumber(value: unknown): boolean {
   return value === undefined || value === null || Number.isFinite(value);
 }
 
+function isOptionalDifficulty(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    value === 1 ||
+    value === 2 ||
+    value === 3
+  );
+}
+
 function isOptionalInputMethod(value: unknown): value is InputMethod | null | undefined {
   return (
     value === undefined ||
@@ -169,6 +179,7 @@ function isPilotEvent(value: unknown): value is PilotEvent {
     (value.selectedSide === null || isSide(value.selectedSide)) &&
     (value.correct === null || typeof value.correct === "boolean") &&
     isFiniteRating(value.rating) &&
+    isOptionalDifficulty(value.difficulty) &&
     isOptionalInputMethod(value.inputMethod) &&
     isOptionalFiniteNumber(value.fps) &&
     isOptionalFiniteNumber(value.drawCalls) &&

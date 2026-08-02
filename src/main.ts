@@ -33,6 +33,7 @@ import {
 import { selectPreferredEnglishVoice } from "./speech";
 import type {
   Concept,
+  Difficulty,
   InputMethod,
   Lesson,
   PilotEventType,
@@ -56,6 +57,17 @@ interface FeedbackState {
   conceptId: string;
 }
 
+const LEVELS: readonly {
+  difficulty: Difficulty;
+  label: string;
+  description: string;
+  glyph: string;
+}[] = [
+  { difficulty: 1, label: "Легкий", description: "Знайомі слова", glyph: "🌱" },
+  { difficulty: 2, label: "Середній", description: "Більше деталей", glyph: "⚡" },
+  { difficulty: 3, label: "Складний", description: "Слова-пастки", glyph: "🔥" },
+];
+
 const appRoot = document.querySelector<HTMLElement>("#app");
 if (!appRoot) {
   throw new Error("App root is missing.");
@@ -68,6 +80,9 @@ const canSpeak =
 const contentErrors = validateContentPack(CONTENT_PACK);
 const loaded = loadState();
 let state: PilotState = loaded.state;
+let selectedDifficulty: Difficulty =
+  CONTENT_PACK.lessons.find((lesson) => lesson.id === state.activeLessonId)
+    ?.difficulty ?? 1;
 let recoveredCompletion = false;
 if (state.activeRun?.status === "active") {
   const interruptedQuestion =
@@ -173,11 +188,18 @@ function appendEvent(
   type: PilotEventType,
   details: Parameters<typeof createPilotEvent>[3] = {},
 ): void {
+  const lessonId = details.lessonId ?? state.activeLessonId;
+  const difficulty = CONTENT_PACK.lessons.find(
+    (lesson) => lesson.id === lessonId,
+  )?.difficulty;
   state = {
     ...state,
     eventLog: [
       ...state.eventLog,
-      createPilotEvent(state, sessionId, type, details),
+      createPilotEvent(state, sessionId, type, {
+        ...details,
+        ...(difficulty === undefined ? {} : { difficulty }),
+      }),
     ],
   };
 }
@@ -303,6 +325,24 @@ function lessonStats(lesson: Lesson): string {
   return attempts === 0 ? "Новий набір" : `${attempts} відповідей`;
 }
 
+function levelMeta(difficulty: Difficulty) {
+  const level = LEVELS.find((candidate) => candidate.difficulty === difficulty);
+  if (!level) {
+    throw new Error(`Unknown difficulty: ${difficulty}`);
+  }
+  return level;
+}
+
+function levelProgress(difficulty: Difficulty): string {
+  const concepts = CONTENT_PACK.concepts.filter(
+    (concept) => concept.difficulty === difficulty,
+  );
+  const practised = concepts.filter(
+    (concept) => (state.conceptProgress[concept.id]?.attempts ?? 0) > 0,
+  ).length;
+  return practised === 0 ? "Новий рівень" : `${practised} / ${concepts.length} слів`;
+}
+
 function renderLessons(): string {
   return `
     ${sceneStart("scene-menu")}
@@ -312,10 +352,28 @@ function renderLessons(): string {
         <section class="lesson-panel" aria-labelledby="lesson-heading">
           <div class="section-heading">
             <h1 id="lesson-heading">Куди біжимо?</h1>
-            <p>Спочатку переглянь шість слів. Потім починай забіг.</p>
+            <p>Обери складність, переглянь шість слів і починай забіг.</p>
           </div>
+          <div class="level-picker" role="group" aria-label="Рівень складності">
+            ${LEVELS.map(
+              (level) => `
+                <button
+                  class="level-button${selectedDifficulty === level.difficulty ? " is-active" : ""}"
+                  type="button"
+                  data-level="${level.difficulty}"
+                  aria-pressed="${String(selectedDifficulty === level.difficulty)}"
+                >
+                  <span aria-hidden="true">${level.glyph}</span>
+                  <strong>${level.label}</strong>
+                  <small>${levelProgress(level.difficulty)}</small>
+                </button>
+              `,
+            ).join("")}
+          </div>
+          <p class="level-description">${levelMeta(selectedDifficulty).description}. Усі рівні відкриті.</p>
           <div class="lesson-grid">
             ${CONTENT_PACK.lessons
+              .filter((lesson) => lesson.difficulty === selectedDifficulty)
               .map(
                 (lesson) => `
                   <button
@@ -368,6 +426,7 @@ function renderReview(): string {
         progress: `${reviewIndex + 1} / ${lesson.conceptIds.length}`,
       })}
       <section class="review-layout" aria-labelledby="review-source">
+        <span class="level-chip">${levelMeta(lesson.difficulty).glyph} ${levelMeta(lesson.difficulty).label}</span>
         <div class="word-card">
           <span class="word-glyph" role="img" aria-label="${escapeHtml(concept.source.uk)}">
             ${concept.glyph}
@@ -489,6 +548,7 @@ function renderRun(): string {
       <section
         class="game-stage"
         data-testid="game-stage"
+        data-difficulty="${activeLesson().difficulty}"
         aria-label="Ігрова доріжка. Обери ліві або праві ворота."
       >
         <div class="prompt-cloud">
@@ -562,6 +622,16 @@ function renderResult(): string {
   }
   const concepts = resultConcepts();
   const rated = currentRunWasRated();
+  const lesson = CONTENT_PACK.lessons.find(
+    (candidate) => candidate.id === run.lessonId,
+  );
+  if (!lesson) {
+    throw new Error("Completed run lesson is missing.");
+  }
+  const nextLevel = LEVELS.find(
+    (level) => level.difficulty === lesson.difficulty + 1,
+  );
+  const canTryNextLevel = run.correctCount >= 8 && nextLevel !== undefined;
   return `
     ${sceneStart("scene-result")}
       <div class="scene-scrim result-scrim"></div>
@@ -573,6 +643,7 @@ function renderResult(): string {
             <small>з ${run.questions.length} правильних</small>
           </div>
           <h1 id="result-heading">Забіг завершено</h1>
+          <span class="level-chip">${levelMeta(lesson.difficulty).glyph} ${levelMeta(lesson.difficulty).label}</span>
           <div class="practised-words" aria-label="Слова цього забігу">
             ${concepts
               .map(
@@ -612,6 +683,22 @@ function renderResult(): string {
                   </div>
                 </fieldset>
               `
+          }
+          ${
+            canTryNextLevel
+              ? `
+                <div class="level-challenge">
+                  <span aria-hidden="true">${nextLevel.glyph}</span>
+                  <div>
+                    <strong>${run.correctCount} правильних — час підняти планку?</strong>
+                    <small>Наступний рівень відкритий. Можна повернутися будь-коли.</small>
+                  </div>
+                  <button class="challenge-button" type="button" data-action="next-level">
+                    Спробувати ${nextLevel.label.toLocaleLowerCase("uk-UA")}
+                  </button>
+                </div>
+              `
+              : ""
           }
           <button class="primary-button" type="button" data-action="replay">
             Бігти ще раз
@@ -698,6 +785,9 @@ function renderMetrics(): string {
         <article><strong>${summary.sessions}</strong><span>сесій</span></article>
         <article><strong>${summary.laneInputs}</strong><span>виборів смуги</span></article>
         <article><strong>${summary.medianFps ?? "Немає"}</strong><span>медіана FPS</span></article>
+        <article><strong>${summary.runsByDifficulty[1]}</strong><span>легких забігів</span></article>
+        <article><strong>${summary.runsByDifficulty[2]}</strong><span>середніх забігів</span></article>
+        <article><strong>${summary.runsByDifficulty[3]}</strong><span>складних забігів</span></article>
       </div>
       <section class="metrics-detail" aria-labelledby="detail-heading">
         <div class="metrics-copy">
@@ -857,6 +947,7 @@ function syncRunnerScene(): void {
     selectedSide: question.selectedSide,
     correctSide: question.correctSide,
     correctStreak: currentCorrectStreak(run),
+    difficulty: activeLesson().difficulty,
     result:
       feedback === null
         ? null
@@ -1005,6 +1096,7 @@ function openLesson(lessonId: string): void {
   if (!lesson) {
     return;
   }
+  selectedDifficulty = lesson.difficulty;
   reviewIndex = 0;
   updateState({ ...state, activeLessonId: lesson.id, activeRun: null });
   screen = "review";
@@ -1246,6 +1338,20 @@ function handleAction(action: string): void {
       screen = "lessons";
       render();
       break;
+    case "next-level": {
+      const run = state.activeRun;
+      const lesson = CONTENT_PACK.lessons.find(
+        (candidate) => candidate.id === run?.lessonId,
+      );
+      if (!run || !lesson || run.correctCount < 8 || lesson.difficulty >= 3) {
+        return;
+      }
+      selectedDifficulty = lesson.difficulty === 1 ? 2 : 3;
+      updateState({ ...state, activeRun: null, activeLessonId: null });
+      screen = "lessons";
+      render();
+      break;
+    }
     case "export-metrics":
       exportMetrics();
       break;
@@ -1283,6 +1389,17 @@ function bindInteractions(): void {
       if (lessonId) {
         openLesson(lessonId);
       }
+    });
+  });
+
+  root.querySelectorAll<HTMLButtonElement>("[data-level]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const difficulty = Number(button.dataset.level);
+      if (difficulty !== 1 && difficulty !== 2 && difficulty !== 3) {
+        return;
+      }
+      selectedDifficulty = difficulty;
+      render();
     });
   });
 

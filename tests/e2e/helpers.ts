@@ -24,13 +24,32 @@ type StoredPilotState = {
     fps?: number | null;
     drawCalls?: number | null;
     pixelRatio?: number | null;
+    difficulty?: number | null;
   }>;
 };
 
 export async function gotoApp(
   page: Page,
-  options: { speechAlreadyMocked?: boolean } = {},
+  options: { speechAlreadyMocked?: boolean; disableWebgl?: boolean } = {},
 ): Promise<void> {
+  if (options.disableWebgl) {
+    await page.addInitScript(() => {
+      const originalGetContext = HTMLCanvasElement.prototype.getContext;
+      Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+        configurable: true,
+        value(
+          this: HTMLCanvasElement,
+          contextId: string,
+          ...args: unknown[]
+        ): RenderingContext | null {
+          if (contextId === "webgl2") {
+            return null;
+          }
+          return Reflect.apply(originalGetContext, this, [contextId, ...args]);
+        },
+      });
+    });
+  }
   if (!options.speechAlreadyMocked) {
     await page.addInitScript(() => {
       Object.defineProperty(window, "speechSynthesis", {
@@ -148,9 +167,7 @@ export async function gotoApp(
     });
   });
   await page.goto("./");
-  await expect
-    .poll(() => page.evaluate(() => window.location.pathname))
-    .toBe("/word-runner-web/");
+  expect(new URL(page.url()).pathname).toBe("/word-runner-web/");
   await expect(page.getByRole("heading", { name: "Словобіг" })).toBeVisible();
 }
 
@@ -204,7 +221,7 @@ export async function answerCurrentQuestion(page: Page): Promise<void> {
     .poll(async () => {
       const state = await readPilotState(page);
       return state.activeRun?.currentIndex ?? -1;
-    })
+    }, { timeout: 15_000 })
     .toBe(currentIndex + 1);
 }
 

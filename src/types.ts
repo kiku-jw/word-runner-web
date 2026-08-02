@@ -1,6 +1,7 @@
 export type Side = "left" | "right";
 export type InputMethod = "tap" | "swipe" | "keyboard";
 export type QuestionOrigin = "base" | "repeat" | "correction";
+export type Difficulty = 1 | 2 | 3;
 
 export interface Concept {
   id: string;
@@ -8,7 +9,7 @@ export interface Concept {
   target: { en: string };
   glyph: string;
   category: string;
-  difficulty: 1 | 2 | 3;
+  difficulty: Difficulty;
   distractorIds: readonly string[];
   reviewStatus: "prototype" | "approved";
 }
@@ -18,6 +19,7 @@ export interface Lesson {
   title: string;
   subtitle: string;
   glyph: string;
+  difficulty: Difficulty;
   conceptIds: readonly [string, string, string, string, string, string];
 }
 
@@ -86,6 +88,7 @@ export interface PilotEvent {
   selectedSide: Side | null;
   correct: boolean | null;
   rating: number | null;
+  difficulty?: Difficulty | null;
   inputMethod?: InputMethod | null;
   fps?: number | null;
   drawCalls?: number | null;

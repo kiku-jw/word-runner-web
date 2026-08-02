@@ -24,6 +24,18 @@ function clonePack(overrides?: Partial<ContentPack>): ContentPack {
 describe("validateContentPack", () => {
   it("accepts the shipped pilot pack", () => {
     expect(validateContentPack(CONTENT_PACK)).toEqual([]);
+    for (const difficulty of [1, 2, 3]) {
+      expect(
+        CONTENT_PACK.lessons.filter(
+          (lesson) => lesson.difficulty === difficulty,
+        ),
+      ).toHaveLength(4);
+      expect(
+        CONTENT_PACK.concepts.filter(
+          (concept) => concept.difficulty === difficulty,
+        ),
+      ).toHaveLength(24);
+    }
   });
 
   it("rejects duplicate concept ids", () => {
@@ -68,6 +80,17 @@ describe("validateContentPack", () => {
 
     expect(validateContentPack(pack)).toContain(
       "Distractor apple for dog is outside its lesson.",
+    );
+  });
+
+  it("rejects a concept whose difficulty differs from its lesson", () => {
+    const pack = clonePack();
+    pack.concepts = pack.concepts.map((concept) =>
+      concept.id === "dog" ? { ...concept, difficulty: 2 } : concept,
+    );
+
+    expect(validateContentPack(pack)).toContain(
+      "Concept dog difficulty does not match lesson animals.",
     );
   });
 });
