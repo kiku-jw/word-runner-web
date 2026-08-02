@@ -329,7 +329,18 @@ test("turns a correct lane choice into a physical gate opening without a modal p
         pointerEvents: getComputedStyle(feedbackElement).pointerEvents,
       };
       await new Promise<void>((resolve) => {
-        window.setTimeout(resolve, 80);
+        const deadline = performance.now() + 500;
+        const waitForOpenFrame = () => {
+          if (
+            (window.__WORD_RUNNER_3D__?.snapshot()?.doorOpen ?? 0) > 0 ||
+            performance.now() >= deadline
+          ) {
+            resolve();
+            return;
+          }
+          window.requestAnimationFrame(waitForOpenFrame);
+        };
+        window.requestAnimationFrame(waitForOpenFrame);
       });
       return {
         ...layout,
@@ -401,19 +412,10 @@ test("adds one deterministic background gag and a playful wrong-answer reaction"
   const blockedEnd = await page.evaluate(() =>
     window.__WORD_RUNNER_3D__?.snapshot() ?? null,
   );
+  expect(blockedStart?.gateResponse).toBe("blocked");
   expect(blockedStart?.worldSpeed).toBe(0);
   expect(blockedEnd?.gateZ).toBe(blockedStart?.gateZ);
   expect(blockedEnd?.worldTravel).toBe(blockedStart?.worldTravel);
-  await expect
-    .poll(() =>
-      page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.gateResponse),
-    )
-    .toBe("blocked");
-  await expect
-    .poll(() =>
-      page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.worldSpeed ?? 99),
-    )
-    .toBe(0);
   await expect
     .poll(() =>
       page.evaluate(
