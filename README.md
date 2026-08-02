@@ -23,6 +23,7 @@ intent, or native-app viability.
 - Four lessons, six concepts per lesson, 24 total concepts.
 - Six-card review before the first run for each lesson.
 - Ten-question runs with immediate correction and replay support.
+- Four local background tracks in a shuffled, fading playlist at 20% volume.
 - A usable CSS fallback when WebGL2 is unavailable.
 - Parent gate with hold-to-open metrics, JSON export, and local reset.
 - Local persistence only. No account, ads, backend, or remote analytics.
@@ -68,11 +69,13 @@ Open the local Vite URL that the command prints.
   `word-runner-pilot-v1`.
 - `src/metrics.ts` records only local pilot events and computes the adult
   summary.
+- `src/music.ts` owns the browser-native shuffled playlist, fades, mute state,
+  speech ducking, and page-visibility pause.
 - `src/content.ts` defines the four lessons and 24 prototype-reviewed concepts.
 - `public/assets/track-carpathians.webp` and `public/assets/runner.webp` remain
   generated original assets for menus and the WebGL fallback. Their provenance
-  is documented in `public/assets/ASSETS.md`; the 3D gameplay world itself is
-  code-native.
+  is documented with the user-supplied soundtrack in
+  `public/assets/ASSETS.md`; the 3D gameplay world itself is code-native.
 
 ## Content model
 
@@ -92,8 +95,9 @@ Each concept uses:
   preferring high-quality local Apple, Google, or Microsoft English voices;
 - lesson-scoped distractor IDs.
 
-The content is prototype-reviewed, not final educational copy. If a future pack
-adds real image or audio assets, that provenance must be reviewed separately.
+The content is prototype-reviewed, not final educational copy. The soundtrack
+is not a per-concept pronunciation pack; future concept-specific images or
+audio still require separate provenance review.
 
 ## Local metrics
 
@@ -142,5 +146,5 @@ the same questions and controls in the simplified CSS presentation.
 
 ## Asset provenance
 
-See [public/assets/ASSETS.md](public/assets/ASSETS.md) for the generated
-background and runner provenance notes.
+See [public/assets/ASSETS.md](public/assets/ASSETS.md) for the generated visual
+assets and user-supplied soundtrack provenance notes.

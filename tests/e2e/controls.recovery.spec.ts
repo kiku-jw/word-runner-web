@@ -363,7 +363,7 @@ test("prioritizes a last-two mistake in the next non-replay run", async ({
   expect(nextRun.activeRun?.questions[6]?.conceptId).toBe(mistakeQuestion.conceptId);
 });
 
-test("shows degraded audio copy without dead buttons when speech synthesis is unavailable", async ({
+test("keeps music controls while showing degraded pronunciation copy", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -379,8 +379,7 @@ test("shows degraded audio copy without dead buttons when speech synthesis is un
 
   await gotoApp(page, { speechAlreadyMocked: true });
   await acceptNotice(page);
-  await expect(page.getByText("Без озвучення")).toBeVisible();
-  await expect(page.locator('[data-action="toggle-sound"]')).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Звук: так" })).toBeVisible();
   await openLesson(page, "Тварини");
   await expect(page.getByText("Озвучення недоступне")).toBeVisible();
   await expect(page.locator('[data-action="speak-current"]')).toHaveCount(0);

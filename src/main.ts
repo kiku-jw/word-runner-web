@@ -14,6 +14,11 @@ import {
   summarizeMetrics,
 } from "./metrics";
 import {
+  BACKGROUND_MUSIC_TRACKS,
+  createBackgroundMusic,
+  type BackgroundMusicSnapshot,
+} from "./music";
+import {
   clearState,
   loadState,
   saveState,
@@ -95,17 +100,30 @@ let lastShownQuestionId: string | null = null;
 let runnerScene: RunnerSceneController | null = null;
 let webglFailed = false;
 let mistakeAudioContext: AudioContext | null = null;
+const backgroundMusic = createBackgroundMusic(
+  BACKGROUND_MUSIC_TRACKS.map(
+    (track) => `${import.meta.env.BASE_URL}assets/music/${track}`,
+  ),
+);
+backgroundMusic?.setEnabled(state.soundEnabled);
+const canControlSound = canSpeak || backgroundMusic !== null;
 
 declare global {
   interface Window {
     __WORD_RUNNER_3D__?: {
       snapshot(): RunnerSceneSnapshot | null;
     };
+    __WORD_RUNNER_MUSIC__?: {
+      snapshot(): BackgroundMusicSnapshot | null;
+    };
   }
 }
 
 window.__WORD_RUNNER_3D__ = {
   snapshot: () => runnerScene?.snapshot() ?? null,
+};
+window.__WORD_RUNNER_MUSIC__ = {
+  snapshot: () => backgroundMusic?.snapshot() ?? null,
 };
 
 const sessionId = randomId("session");
@@ -206,7 +224,7 @@ function topBar(options: {
           : `<span class="top-label">${escapeHtml(options.label ?? "")}</span>`
       }
       ${
-        canSpeak
+        canControlSound
           ? `
             <button
               class="icon-button sound-button"
@@ -886,6 +904,7 @@ function speak(concept: Concept | null): void {
   ) {
     return;
   }
+  backgroundMusic?.setDucked(false);
   window.speechSynthesis.cancel();
   const preferredEnglishVoice = selectPreferredEnglishVoice(
     window.speechSynthesis.getVoices(),
@@ -897,7 +916,15 @@ function speak(concept: Concept | null): void {
   utterance.lang = preferredEnglishVoice?.lang ?? "en-US";
   utterance.rate = 0.9;
   utterance.pitch = 1;
-  window.speechSynthesis.speak(utterance);
+  const releaseMusic = (): void => backgroundMusic?.setDucked(false);
+  utterance.onend = releaseMusic;
+  utterance.onerror = releaseMusic;
+  backgroundMusic?.setDucked(true);
+  try {
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    releaseMusic();
+  }
 }
 
 function playMistakeSound(onEnded: () => void): void {
@@ -957,10 +984,19 @@ function playAnswerAudio(concept: Concept, correct: boolean): void {
 }
 
 function toggleSound(): void {
+  const soundEnabled = !state.soundEnabled;
   if (canSpeak) {
     window.speechSynthesis.cancel();
   }
-  updateState({ ...state, soundEnabled: !state.soundEnabled });
+  backgroundMusic?.setDucked(false);
+  backgroundMusic?.setEnabled(soundEnabled);
+  if (
+    soundEnabled &&
+    (screen === "run" || backgroundMusic?.snapshot().started)
+  ) {
+    backgroundMusic?.start();
+  }
+  updateState({ ...state, soundEnabled });
   render();
 }
 
@@ -1001,6 +1037,8 @@ function startRun(isReplay = false): void {
   feedback = null;
   inputLocked = false;
   screen = "run";
+  backgroundMusic?.setEnabled(state.soundEnabled);
+  backgroundMusic?.start();
   render();
 }
 
@@ -1025,6 +1063,8 @@ function answer(side: Side, inputMethod: InputMethod): void {
   if (screen !== "run" || inputLocked || !run) {
     return;
   }
+  backgroundMusic?.setEnabled(state.soundEnabled);
+  backgroundMusic?.start();
   inputLocked = true;
   const question = run.questions[run.currentIndex];
   if (!question) {
@@ -1347,14 +1387,21 @@ window.addEventListener("beforeunload", () => {
   if (canSpeak) {
     window.speechSynthesis.cancel();
   }
+  backgroundMusic?.dispose();
   runnerScene?.dispose();
 });
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
+    if (canSpeak) {
+      window.speechSynthesis.cancel();
+    }
+    backgroundMusic?.setDucked(false);
+    backgroundMusic?.setPageVisible(false);
     runnerScene?.hide();
     return;
   }
+  backgroundMusic?.setPageVisible(true);
   syncRunnerScene();
 });
 

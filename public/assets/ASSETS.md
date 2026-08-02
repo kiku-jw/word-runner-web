@@ -18,3 +18,18 @@
 
 Neither image contains third-party branding or copied text.
 
+## Background music
+
+The following tracks were supplied by the repository owner for this public
+prototype on 2026-08-02:
+
+- `music/bouncy-block-adventure-1.mp3` from `Bouncy Block Adventure.mp3`;
+- `music/bouncy-block-adventure-2.mp3` from `Bouncy Block Adventure (1).mp3`;
+- `music/bouncy-block-adventure-3.mp3` from `Bouncy Block Adventure (2).mp3`;
+- `music/marble-dash-parade.mp3` from `Marble Dash Parade.mp3`.
+
+The supplied metadata names `kiku_jw` as artist. Repository copies were
+transcoded locally with FFmpeg to 112 kbps, 44.1 kHz stereo MP3 for lower mobile
+transfer cost; the source files in Downloads were not changed. Adding them here
+records owner authorization for this prototype, not an independent claim about
+commercial distribution rights outside it.

@@ -44,6 +44,50 @@ export async function gotoApp(
     });
   }
   await page.addInitScript(() => {
+    const musicAudioInstances: MockMusicAudio[] = [];
+    class MockMusicAudio extends EventTarget {
+      currentTime = 0;
+      duration = 120;
+      paused = true;
+      preload = "";
+      src = "";
+      volume = 1;
+
+      constructor() {
+        super();
+        musicAudioInstances.push(this);
+      }
+
+      load(): void {}
+
+      pause(): void {
+        this.paused = true;
+      }
+
+      play(): Promise<void> {
+        this.paused = false;
+        return Promise.resolve();
+      }
+    }
+    Object.defineProperty(window, "Audio", {
+      configurable: true,
+      value: MockMusicAudio,
+    });
+    Object.defineProperty(window, "__musicAudioHarness", {
+      configurable: true,
+      value: {
+        finish(): void {
+          const audio = musicAudioInstances.at(-1);
+          if (!audio) {
+            return;
+          }
+          audio.currentTime = audio.duration;
+          audio.paused = true;
+          audio.dispatchEvent(new Event("ended"));
+        },
+      },
+    });
+
     let mistakeToneStarts = 0;
     class SilentAudioParam {
       setValueAtTime(): this {

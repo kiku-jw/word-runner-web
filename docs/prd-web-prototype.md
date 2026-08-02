@@ -191,6 +191,7 @@ scene and native DOM overlays:
 - Total active concepts: 24.
 - The current public build ships the exact lessons `Тварини`, `Їжа й напої`, `Транспорт`, and `Природа`.
 - Concepts use emoji glyphs and browser speech synthesis instead of a per-concept licensed image/audio bundle.
+- Four local user-supplied music tracks provide a quiet shuffled background soundtrack; they are not concept content.
 - All 24 concepts are marked `reviewStatus: "prototype"` in `src/content.ts`; a human bilingual review is still required before any child pilot beyond owner smoke use.
 - Generated background and runner assets are documented in `public/assets/ASSETS.md`.
 
@@ -202,6 +203,7 @@ The data format must support a future 100-concept pack without changing gameplay
 
 - All content assets ship with the prototype; gameplay must not call remote image, text-to-speech, or translation services.
 - The current concept layer uses browser-native emoji glyphs and browser speech synthesis, so the build does not ship a per-concept image/audio bundle.
+- Background music ships locally, starts after a user gesture, targets 20% volume, fades between tracks, and follows the shared sound toggle.
 - Generated background and runner assets are documented in `public/assets/ASSETS.md`.
 - Asset source and license manifest: `public/assets/ASSETS.md`.
 - Generated assets must also have a recorded source and review status.

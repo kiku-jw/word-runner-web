@@ -1,6 +1,8 @@
 # Implementation Notes
 
-Canonical execution: [GitHub Issue #2](https://github.com/kiku-jw/word-runner-web/issues/2).
+Canonical execution: [GitHub Issue #2](https://github.com/kiku-jw/word-runner-web/issues/2),
+with the soundtrack follow-up tracked in
+[GitHub Issue #3](https://github.com/kiku-jw/word-runner-web/issues/3).
 
 Public demo: [https://kiku-jw.github.io/word-runner-web/](https://kiku-jw.github.io/word-runner-web/).
 
@@ -30,6 +32,13 @@ prefers local English voices, then enhanced Apple voices such as Ava or
 Samantha, with system Google and Microsoft voices as fallbacks. It does not
 download audio or call a TTS service from application code. The generated
 background and runner assets are documented in `public/assets/ASSETS.md`.
+
+Four user-supplied background tracks ship as local 112 kbps stereo MP3 files.
+The browser-native music controller starts only after a gameplay gesture, uses
+a shuffled bag with no immediate cross-cycle repeat, fades each track in and
+out, and caps its normal volume at 20%. The shared sound toggle pauses both
+music and speech; pronunciation temporarily ducks music to 8%. Playback pauses
+while the document is hidden and makes no remote audio request.
 
 ## Metrics boundary
 

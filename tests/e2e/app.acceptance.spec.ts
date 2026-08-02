@@ -95,6 +95,92 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
   expect(settledSnapshot?.gateZ).toBeGreaterThan(-18);
 });
 
+test("plays a local shuffled soundtrack with fades and a 20 percent ceiling", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const trackNames = [
+    "bouncy-block-adventure-1.mp3",
+    "bouncy-block-adventure-2.mp3",
+    "bouncy-block-adventure-3.mp3",
+    "marble-dash-parade.mp3",
+  ];
+  for (const trackName of trackNames) {
+    const response = await request.fetch(
+      new URL(`assets/music/${trackName}`, baseURL).toString(),
+      { method: "HEAD" },
+    );
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("audio/mpeg");
+  }
+
+  await gotoApp(page);
+  await page.getByRole("button", { name: "Почати забіг" }).click();
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__WORD_RUNNER_MUSIC__?.snapshot() ?? null),
+    )
+    .toMatchObject({
+      enabled: true,
+      started: true,
+      playing: true,
+      targetVolume: 0.2,
+      pageVisible: true,
+    });
+
+  const playedTracks: string[] = [];
+  let nextCycleTrack: string | null = null;
+  for (let index = 0; index < trackNames.length; index += 1) {
+    const currentTrack = await page.evaluate(
+      () => window.__WORD_RUNNER_MUSIC__?.snapshot()?.currentTrack ?? null,
+    );
+    expect(currentTrack).not.toBeNull();
+    playedTracks.push(currentTrack!);
+    const trackAfterFinish = await page.evaluate(() => {
+      (
+        window as typeof window & {
+          __musicAudioHarness: { finish(): void };
+        }
+      ).__musicAudioHarness.finish();
+      return window.__WORD_RUNNER_MUSIC__?.snapshot()?.currentTrack ?? null;
+    });
+    if (index < trackNames.length - 1) {
+      expect(trackAfterFinish).not.toBe(currentTrack);
+    } else {
+      nextCycleTrack = trackAfterFinish;
+    }
+  }
+  expect(new Set(playedTracks).size).toBe(trackNames.length);
+  expect(nextCycleTrack).not.toBe(playedTracks.at(-1));
+
+  await page
+    .getByRole("button", { name: "Звук: так" })
+    .evaluate((button) => (button as HTMLButtonElement).click());
+  expect(
+    await page.evaluate(() => window.__WORD_RUNNER_MUSIC__?.snapshot() ?? null),
+  ).toMatchObject({ enabled: false, playing: false, volume: 0 });
+
+  await page.getByRole("button", { name: "Звук: ні" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__WORD_RUNNER_MUSIC__?.snapshot()?.playing),
+    )
+    .toBe(true);
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(
+    await page.evaluate(() => window.__WORD_RUNNER_MUSIC__?.snapshot() ?? null),
+  ).toMatchObject({ pageVisible: false, playing: false, volume: 0 });
+});
+
 test("turns a correct lane choice into a physical gate opening without a modal pause", async ({
   page,
 }) => {
