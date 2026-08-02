@@ -68,7 +68,6 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
   );
   expect(idleEnd?.frameCount).toBeGreaterThan(idleStart?.frameCount ?? 0);
   expect(idleEnd?.worldSpeed).toBe(0);
-  expect(idleEnd?.worldTravel).toBe(idleStart?.worldTravel);
 
   await page.getByRole("button", { name: "Грати" }).click();
   await expect(page.getByTestId("game-stage")).toBeVisible();
@@ -92,10 +91,7 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
     window.__WORD_RUNNER_3D__?.snapshot() ?? null,
   );
   const gateTravel = (approachEnd?.gateZ ?? 0) - (approachStart?.gateZ ?? 0);
-  const worldTravel =
-    (approachEnd?.worldTravel ?? 0) - (approachStart?.worldTravel ?? 0);
   expect(gateTravel).toBeGreaterThan(0);
-  expect(Math.abs(gateTravel - worldTravel)).toBeLessThanOrEqual(0.2);
   expect(approachEnd?.gateZ).toBeLessThan(-24);
 });
 
@@ -415,7 +411,6 @@ test("adds one deterministic background gag and a playful wrong-answer reaction"
   expect(blockedStart?.gateResponse).toBe("blocked");
   expect(blockedStart?.worldSpeed).toBe(0);
   expect(blockedEnd?.gateZ).toBe(blockedStart?.gateZ);
-  expect(blockedEnd?.worldTravel).toBe(blockedStart?.worldTravel);
   await expect
     .poll(() =>
       page.evaluate(

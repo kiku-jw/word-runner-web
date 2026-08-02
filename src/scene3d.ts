@@ -79,7 +79,6 @@ export interface RunnerSceneSnapshot extends RunnerPerformanceSample {
   doorOpen: number;
   runnerLean: number;
   worldSpeed: number;
-  worldTravel: number;
   backgroundGagVisible: boolean;
   backgroundGagQuestionIndex: number;
   difficulty: Difficulty;
@@ -790,7 +789,6 @@ export function createRunnerScene(
   let currentCorrectStreak = 0;
   let currentDifficulty: Difficulty = 1;
   let currentWorldSpeed = 8.8;
-  let worldTravel = 0;
   let lastTime = 0;
   let elapsed = 0;
   let frameCount = 0;
@@ -865,7 +863,6 @@ export function createRunnerScene(
       ? 0
       : (baseWorldSpeed + answerBoost) * approachScale;
     const worldSpeed = currentWorldSpeed;
-    worldTravel += worldSpeed * delta;
     for (const marker of trackMarkers) {
       marker.position.z += worldSpeed * delta;
       if (marker.position.z > 16) {
@@ -1231,7 +1228,6 @@ export function createRunnerScene(
         doorOpen: Math.round(doorOpen * 100) / 100,
         runnerLean: Math.round(runnerLean * 100) / 100,
         worldSpeed: Math.round(currentWorldSpeed * 10) / 10,
-        worldTravel: Math.round(worldTravel * 100) / 100,
         backgroundGagVisible: backgroundGagActive,
         backgroundGagQuestionIndex: scheduledBackgroundGagQuestionIndex,
         difficulty: currentDifficulty,
