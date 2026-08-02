@@ -21,6 +21,7 @@ type StoredPilotState = {
   eventLog: Array<{
     type: string;
     inputMethod?: string | null;
+    selectedSide?: "left" | "right" | null;
     fps?: number | null;
     drawCalls?: number | null;
     pixelRatio?: number | null;
@@ -30,8 +31,31 @@ type StoredPilotState = {
 
 export async function gotoApp(
   page: Page,
-  options: { speechAlreadyMocked?: boolean; disableWebgl?: boolean } = {},
+  options: {
+    speechAlreadyMocked?: boolean;
+    disableWebgl?: boolean;
+    realQuestionTimeout?: boolean;
+  } = {},
 ): Promise<void> {
+  if (!options.realQuestionTimeout) {
+    await page.addInitScript(() => {
+      // Keep legacy interaction tests deterministic; the timeout acceptance
+      // test explicitly opts into the real Easy/Medium/Hard deadlines.
+      const nativeSetTimeout = window.setTimeout.bind(window);
+      window.setTimeout = ((
+        handler: TimerHandler,
+        timeout = 0,
+        ...args: unknown[]
+      ) =>
+        nativeSetTimeout(
+          handler,
+          timeout === 8_000 || timeout === 9_000 || timeout === 10_000
+            ? 60_000
+            : timeout,
+          ...args,
+        )) as typeof window.setTimeout;
+    });
+  }
   if (options.disableWebgl) {
     await page.addInitScript(() => {
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
@@ -199,20 +223,33 @@ export async function readPilotState(page: Page): Promise<StoredPilotState> {
 }
 
 export async function answerCurrentQuestion(page: Page): Promise<void> {
-  const before = await readPilotState(page);
-  const run = before.activeRun;
-  if (!run) {
-    throw new Error("Active run is missing.");
-  }
-  const currentIndex = run.currentIndex;
-  const currentQuestion = run.questions[currentIndex];
-  if (!currentQuestion) {
-    throw new Error(`Question ${currentIndex} is missing.`);
-  }
+  const answered = await page.evaluate((key) => {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      throw new Error(`Missing localStorage state for ${key}`);
+    }
+    const run = (JSON.parse(raw) as StoredPilotState).activeRun;
+    if (!run) {
+      throw new Error("Active run is missing.");
+    }
+    const question = run.questions[run.currentIndex];
+    if (!question) {
+      throw new Error(`Question ${run.currentIndex} is missing.`);
+    }
+    const button = document.querySelector<HTMLButtonElement>(
+      `[data-side="${question.correctSide}"]`,
+    );
+    if (!button || button.disabled) {
+      throw new Error(`Question ${run.currentIndex} is not answerable.`);
+    }
+    button.click();
+    return {
+      currentIndex: run.currentIndex,
+      questionCount: run.questions.length,
+    };
+  }, STORAGE_KEY);
 
-  await page.locator(`[data-side="${currentQuestion.correctSide}"]`).click();
-
-  if (currentIndex === run.questions.length - 1) {
+  if (answered.currentIndex === answered.questionCount - 1) {
     await expect(page.getByRole("heading", { name: "Забіг завершено" })).toBeVisible();
     return;
   }
@@ -222,7 +259,7 @@ export async function answerCurrentQuestion(page: Page): Promise<void> {
       const state = await readPilotState(page);
       return state.activeRun?.currentIndex ?? -1;
     }, { timeout: 15_000 })
-    .toBe(currentIndex + 1);
+    .toBe(answered.currentIndex + 1);
 }
 
 export async function completeRun(page: Page): Promise<void> {

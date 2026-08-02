@@ -38,6 +38,8 @@ separate quiz screen.
 
 - Make the choice happen in the world: lane movement, gate response, camera, and
   pace should all acknowledge the answer.
+- Open with the character, not a settings sheet: the start menu introduces the
+  runner face-to-face and lets the child choose challenge before play.
 - Keep learning feedback immediate and readable, but subordinate it to the run.
 - Spend delight on physical cause and effect; one convincing interaction matters
   more than several decorative gags.
@@ -45,6 +47,8 @@ separate quiz screen.
   quiet parent-controlled sound path.
 - Make challenge visible but optional: harder vocabulary and a quicker visual
   pace, with no locked levels, lives, or failure penalty.
+- Keep the run finite: an unanswered gate becomes a gentle correction and a
+  recorded error, never an endless approach or a forced restart.
 - Treat voluntary replay as the engagement signal; treat learning efficacy and
   delayed retention as separate experiments.
 
@@ -58,5 +62,5 @@ force a restart. Audio remains optional and never owns essential information.
 ## Lifecycle
 
 This is a live product contract derived from the approved prototype PRD,
-supervised feedback, and GitHub Issues #2 and #4. Update it only when the target user,
+supervised feedback, and GitHub Issues #2, #4, and #5. Update it only when the target user,
 validation purpose, product personality, or strategic design principles change.

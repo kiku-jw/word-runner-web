@@ -174,6 +174,16 @@ describe("loadState", () => {
 
     expect(loadState(validStorage).warning).toBeNull();
 
+    const timeoutStorage = createStorage({
+      [STORAGE_KEY]: JSON.stringify({
+        ...state,
+        eventLog: [
+          { ...validEvent, type: "answer_selected", inputMethod: "timeout" },
+        ],
+      }),
+    });
+    expect(loadState(timeoutStorage).warning).toBeNull();
+
     const invalidStorage = createStorage({
       [STORAGE_KEY]: JSON.stringify({
         ...state,

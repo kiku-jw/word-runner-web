@@ -13,7 +13,7 @@ export interface EventDetails {
   runId?: string;
   lessonId?: string;
   conceptId?: string;
-  selectedSide?: Side;
+  selectedSide?: Side | null;
   correct?: boolean;
   rating?: number;
   inputMethod?: InputMethod;

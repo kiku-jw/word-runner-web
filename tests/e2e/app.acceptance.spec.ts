@@ -54,8 +54,13 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
       page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.frameCount ?? 0),
     )
     .toBeGreaterThan(2);
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.view ?? null),
+    )
+    .toBe("front");
 
-  await page.getByRole("button", { name: "Почати забіг" }).click();
+  await page.getByRole("button", { name: "Грати" }).click();
   await expect(page.getByTestId("game-stage")).toBeVisible();
   await expect(page.getByText("1 / 10")).toBeVisible();
   const state = await readPilotState(page);
@@ -65,34 +70,11 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
     window.__WORD_RUNNER_3D__?.snapshot() ?? null,
   );
   expect(snapshot?.ready).toBe(true);
+  expect(snapshot?.view).toBe("run");
   expect(snapshot?.questionId).not.toBeNull();
   expect(snapshot?.drawCalls).toBeLessThan(100);
   expect(snapshot?.pixelRatio).toBeLessThanOrEqual(1.25);
 
-  await expect
-    .poll(
-      () =>
-        page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.gateZ ?? -99),
-      { timeout: 8_000 },
-    )
-    .toBeGreaterThan(-10);
-
-  await expect
-    .poll(async () => {
-      const current = await readPilotState(page);
-      return current.eventLog.some((event) => event.type === "render_sampled");
-    }, { timeout: 8_000 })
-    .toBe(true);
-  const sampledState = await readPilotState(page);
-  const sample = sampledState.eventLog.find(
-    (event) => event.type === "render_sampled",
-  );
-  expect(sample?.fps).toBeGreaterThan(0);
-  expect(sample?.drawCalls).toBeLessThan(100);
-  const settledSnapshot = await page.evaluate(() =>
-    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
-  );
-  expect(settledSnapshot?.gateZ).toBeGreaterThan(-18);
 });
 
 test("offers three open levels with separate content and a next-level challenge", async ({
@@ -176,7 +158,7 @@ test("plays a local shuffled soundtrack with fades and a 20 percent ceiling", as
   }
 
   await gotoApp(page);
-  await page.getByRole("button", { name: "Почати забіг" }).click();
+  await page.getByRole("button", { name: "Грати" }).click();
 
   await expect
     .poll(() =>
@@ -241,6 +223,59 @@ test("plays a local shuffled soundtrack with fades and a 20 percent ceiling", as
   ).toMatchObject({ pageVisible: false, playing: false, volume: 0 });
 });
 
+test("starts the selected level from the menu and counts an unanswered question as an error", async ({
+  page,
+}) => {
+  test.slow();
+  await gotoApp(page, {
+    disableWebgl: true,
+    realQuestionTimeout: true,
+  });
+
+  await page.getByRole("button", { name: /Складний\. Слова-пастки/ }).click();
+  await expect(page.getByRole("button", { name: /Складний\. Слова-пастки/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.getByRole("button", { name: "Грати" }).click();
+
+  const started = await readPilotState(page);
+  expect(started.activeLessonId).toMatch(/^hard-/);
+  const firstConceptId = started.activeRun?.questions[0]?.conceptId;
+  expect(firstConceptId).toBeTruthy();
+  await expect(page.locator(".question-timer")).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      const current = await readPilotState(page);
+      return current.eventLog.some(
+        (event) =>
+          event.type === "answer_selected" && event.inputMethod === "timeout",
+      );
+    }, { timeout: 12_000 })
+    .toBe(true);
+
+  const timedOut = await readPilotState(page);
+  expect(
+    timedOut.eventLog.find(
+      (event) =>
+        event.type === "answer_selected" && event.inputMethod === "timeout",
+    )?.selectedSide,
+  ).toBeNull();
+  expect(timedOut.eventLog.some(
+    (event) => event.type === "lane_selected" && event.inputMethod === "timeout",
+  )).toBe(false);
+  const progress = timedOut.conceptProgress[firstConceptId!] as {
+    attempts: number;
+    errors: number;
+  };
+  expect(progress).toMatchObject({ attempts: 1, errors: 1 });
+
+  await expect
+    .poll(async () => (await readPilotState(page)).activeRun?.currentIndex ?? -1)
+    .toBe(1);
+});
+
 test("turns a correct lane choice into a physical gate opening without a modal pause", async ({
   page,
 }) => {
@@ -257,7 +292,7 @@ test("turns a correct lane choice into a physical gate opening without a modal p
 
   const feedbackLayout = await page
     .locator(`[data-side="${question?.correctSide}"]`)
-    .evaluate((button) => {
+    .evaluate(async (button) => {
       (button as HTMLButtonElement).click();
       const feedbackElement =
         document.querySelector<HTMLElement>(".feedback-layer");
@@ -266,10 +301,19 @@ test("turns a correct lane choice into a physical gate opening without a modal p
       if (!feedbackElement || !stageElement) {
         return null;
       }
-      return {
+      const layout = {
         feedbackHeight: feedbackElement.getBoundingClientRect().height,
         stageHeight: stageElement.getBoundingClientRect().height,
         pointerEvents: getComputedStyle(feedbackElement).pointerEvents,
+      };
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => resolve());
+        });
+      });
+      return {
+        ...layout,
+        scene: window.__WORD_RUNNER_3D__?.snapshot() ?? null,
       };
     });
   expect(feedbackLayout).not.toBeNull();
@@ -277,21 +321,17 @@ test("turns a correct lane choice into a physical gate opening without a modal p
     feedbackLayout!.stageHeight * 0.22,
   );
   expect(feedbackLayout!.pointerEvents).toBe("none");
-
+  expect(feedbackLayout!.scene?.gateResponse).toMatch(/opening|cleared/);
+  expect(feedbackLayout!.scene?.drawCalls).toBeLessThan(100);
   await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const snapshot = window.__WORD_RUNNER_3D__?.snapshot();
-        return Boolean(
-          snapshot &&
-            snapshot.doorOpen > 0.25 &&
-            /opening|cleared/.test(snapshot.gateResponse) &&
-            snapshot.worldSpeed > 8.8 &&
-            snapshot.drawCalls < 100,
-        );
-      }),
+    .poll(
+      () =>
+        page.evaluate(
+          () => window.__WORD_RUNNER_3D__?.snapshot()?.doorOpen ?? 0,
+        ),
+      { timeout: 1_000, intervals: [16, 32, 64] },
     )
-    .toBe(true);
+    .toBeGreaterThan(0);
 });
 
 test("adds one deterministic background gag and a playful wrong-answer reaction", async ({

@@ -88,7 +88,8 @@ function isOptionalInputMethod(value: unknown): value is InputMethod | null | un
     value === null ||
     value === "tap" ||
     value === "swipe" ||
-    value === "keyboard"
+    value === "keyboard" ||
+    value === "timeout"
   );
 }
 

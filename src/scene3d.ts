@@ -79,6 +79,7 @@ export interface RunnerSceneSnapshot extends RunnerPerformanceSample {
   backgroundGagVisible: boolean;
   backgroundGagQuestionIndex: number;
   difficulty: Difficulty;
+  view: "front" | "run";
 }
 
 export interface RunnerSceneController {
@@ -228,6 +229,17 @@ function createRunner(): RunnerRig {
   const head = new Mesh(new SphereGeometry(0.43, 16, 12), skin);
   head.position.y = 2.83;
   group.add(head);
+
+  const face = new MeshBasicMaterial({ color: 0x17213a });
+  for (const x of [-0.15, 0.15]) {
+    const eye = new Mesh(new SphereGeometry(0.055, 10, 8), face);
+    eye.position.set(x, 2.9, -0.4);
+    group.add(eye);
+  }
+  const smile = new Mesh(new TorusGeometry(0.12, 0.025, 6, 18, Math.PI), face);
+  smile.position.set(0, 2.71, -0.4);
+  smile.rotation.z = Math.PI;
+  group.add(smile);
 
   const hairCap = new Mesh(
     new SphereGeometry(0.45, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
@@ -783,6 +795,7 @@ export function createRunnerScene(
   let performanceReported = false;
   let performanceRunId: string | null = null;
   let pulseAge = 0;
+  let attractMode = false;
 
   const compactViewport = (): boolean => window.innerWidth <= 700;
 
@@ -1027,16 +1040,41 @@ export function createRunnerScene(
       ? Math.sin(elapsed * 58) * Math.max(0, 1 - pulseAge / 0.55) * 0.13
       : 0;
     const correctPunch = result === "correct" && !reducedMotion ? reactionWave : 0;
-    camera.position.x = runner.group.position.x * 0.08 + wrongShake;
-    camera.position.y = 6.15 + (reducedMotion ? 0 : Math.sin(elapsed * 3.2) * 0.035);
-    camera.position.z = 13.8 - correctPunch * 0.42;
-    const targetFov = reducedMotion ? 53 : 53 + Math.max(0, worldSpeed - 8.8) * 0.72;
+    if (attractMode) {
+      const wave = reducedMotion ? 0.15 : Math.sin(elapsed * 3.2) * 0.25;
+      runner.group.position.x = 0;
+      runner.group.position.z = 3.4;
+      runner.group.position.y = 0.04 + (reducedMotion ? 0 : Math.sin(elapsed * 2.2) * 0.025);
+      runner.group.rotation.set(0, Math.PI, 0);
+      runner.group.scale.setScalar(0.98);
+      runner.leftArm.rotation.set(0, 0, -2.05 + wave);
+      runner.rightArm.rotation.set(0, 0, 0.12);
+      runner.leftLeg.rotation.x = 0.04;
+      runner.rightLeg.rotation.x = -0.04;
+    }
+    const targetCameraX = attractMode ? 0 : runner.group.position.x * 0.08 + wrongShake;
+    const targetCameraY = attractMode
+      ? 3.35
+      : 6.15 + (reducedMotion ? 0 : Math.sin(elapsed * 3.2) * 0.035);
+    const targetCameraZ = attractMode ? 8.35 : 13.8 - correctPunch * 0.42;
+    camera.position.x = MathUtils.damp(camera.position.x, targetCameraX, 7, delta);
+    camera.position.y = MathUtils.damp(camera.position.y, targetCameraY, 7, delta);
+    camera.position.z = MathUtils.damp(camera.position.z, targetCameraZ, 7, delta);
+    const targetFov = attractMode
+      ? 44
+      : reducedMotion
+        ? 53
+        : 53 + Math.max(0, worldSpeed - 8.8) * 0.72;
     const nextFov = MathUtils.damp(camera.fov, targetFov, 8, delta);
     if (Math.abs(nextFov - camera.fov) > 0.005) {
       camera.fov = nextFov;
       camera.updateProjectionMatrix();
     }
-    camera.lookAt(runner.group.position.x * 0.15, 1.45, -13.5);
+    camera.lookAt(
+      attractMode ? 0 : runner.group.position.x * 0.15,
+      attractMode ? 2.08 : 1.45,
+      attractMode ? 3.4 : -13.5,
+    );
 
     if (pulse.visible) {
       const progress = Math.min(1, pulseAge / 0.62);
@@ -1087,6 +1125,7 @@ export function createRunnerScene(
     },
 
     attract() {
+      attractMode = true;
       questionId = null;
       selectedSide = null;
       result = null;
@@ -1103,6 +1142,7 @@ export function createRunnerScene(
     },
 
     sync(question) {
+      attractMode = false;
       currentDifficulty = question.difficulty;
       if (question.runId !== performanceRunId) {
         performanceRunId = question.runId;
@@ -1179,6 +1219,7 @@ export function createRunnerScene(
         backgroundGagVisible: backgroundGagActive,
         backgroundGagQuestionIndex: scheduledBackgroundGagQuestionIndex,
         difficulty: currentDifficulty,
+        view: attractMode ? "front" : "run",
         lane:
           Math.abs(runner.group.position.x) < 0.25
             ? "center"

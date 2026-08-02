@@ -55,7 +55,14 @@ type Screen =
 interface FeedbackState {
   correct: boolean;
   conceptId: string;
+  timedOut: boolean;
 }
+
+const QUESTION_TIME_MS: Record<Difficulty, number> = {
+  1: 10_000,
+  2: 9_000,
+  3: 8_000,
+};
 
 const LEVELS: readonly {
   difficulty: Difficulty;
@@ -97,18 +104,20 @@ let storageWarning = loaded.warning;
 let storageWriteBlocked = loaded.warning !== null;
 let screen: Screen = contentErrors.length > 0
   ? "content-error"
-  : !state.noticeConfirmed
-    ? "welcome"
-    : state.activeRun?.status === "active"
+  : state.activeRun?.status === "active"
       ? "run"
       : state.activeRun?.status === "complete"
         ? "result"
-        : "lessons";
+        : "welcome";
 let screenBeforeParentGate: Screen = state.noticeConfirmed ? "lessons" : "welcome";
 let reviewIndex = 0;
 let feedback: FeedbackState | null = null;
 let inputLocked = false;
 let feedbackTimer: number | null = null;
+let questionTimer: number | null = null;
+let timedQuestionId: string | null = null;
+let questionDeadline = 0;
+let questionRemainingMs = 0;
 let parentGateTimer: number | null = null;
 let pointerStart: { x: number; y: number } | null = null;
 let lastShownQuestionId: string | null = null;
@@ -291,14 +300,30 @@ function renderWelcome(): string {
         <div class="welcome-copy">
           <span class="welcome-kicker">Українська + English</span>
           <h1>Словобіг</h1>
-          <p>Обери правильне слово і пройди десять воріт.</p>
+          <p>Готовий? Обирай рівень — і вперед!</p>
         </div>
         <div class="welcome-runner" aria-hidden="true">
           <img src="${asset("runner.webp")}" alt="" width="1024" height="1536" />
         </div>
         <div class="welcome-actions">
+          <div class="welcome-level-picker" role="group" aria-label="Рівень складності">
+            ${LEVELS.map(
+              (level) => `
+                <button
+                  class="welcome-level-button${selectedDifficulty === level.difficulty ? " is-active" : ""}"
+                  type="button"
+                  data-level="${level.difficulty}"
+                  aria-pressed="${String(selectedDifficulty === level.difficulty)}"
+                  aria-label="${level.label}. ${level.description}"
+                >
+                  <span aria-hidden="true">${level.glyph}</span>
+                  ${level.label}
+                </button>
+              `,
+            ).join("")}
+          </div>
           <button class="primary-button" type="button" data-action="quick-run">
-            Почати забіг
+            Грати
           </button>
           <button class="secondary-button" type="button" data-action="accept-notice">
             Обрати набір
@@ -514,7 +539,7 @@ function renderFeedback(): string {
     <div class="feedback-layer" role="status" aria-live="assertive">
       <div class="feedback-card ${feedback.correct ? "feedback-correct" : "feedback-correction"}">
         <span class="feedback-reaction" aria-hidden="true">
-          ${feedback.correct ? "Так!" : "О-о!"}
+          ${feedback.correct ? "Так!" : feedback.timedOut ? "Час!" : "О-о!"}
         </span>
         <span class="feedback-glyph" aria-hidden="true">${concept.glyph}</span>
         <div>
@@ -541,6 +566,13 @@ function renderRun(): string {
   const options = optionsForQuestion(CONTENT_PACK, question);
   const selectedSide = question.selectedSide;
   const correctStreak = currentCorrectStreak(run);
+  ensureQuestionTimer(question.id);
+  const remainingMs = Math.max(
+    250,
+    timedQuestionId === question.id
+      ? questionDeadline - performance.now()
+      : QUESTION_TIME_MS[activeLesson().difficulty],
+  );
   return `
     ${sceneStart("scene-run")}
       <div class="run-contrast"></div>
@@ -554,6 +586,13 @@ function renderRun(): string {
         <div class="prompt-cloud">
           <span>Що це англійською?</span>
           <h1>${escapeHtml(concept.source.uk)}</h1>
+          <div
+            class="question-timer${inputLocked ? " is-stopped" : ""}"
+            role="timer"
+            aria-label="На відповідь є ${Math.ceil(remainingMs / 1000)} секунд"
+          >
+            <i style="--question-time: ${Math.round(remainingMs)}ms"></i>
+          </div>
         </div>
         <div class="run-hud" aria-label="Результат і темп забігу">
           <span class="run-score" aria-label="Правильних відповідей: ${run.correctCount}">
@@ -1150,6 +1189,70 @@ function finishCurrentRun(): void {
   render();
 }
 
+function clearQuestionTimer(): void {
+  if (questionTimer !== null) {
+    window.clearTimeout(questionTimer);
+    questionTimer = null;
+  }
+  timedQuestionId = null;
+  questionDeadline = 0;
+  questionRemainingMs = 0;
+}
+
+function expireQuestion(questionId: string): void {
+  questionTimer = null;
+  const run = state.activeRun;
+  const question = run?.questions[run.currentIndex];
+  if (
+    screen !== "run" ||
+    inputLocked ||
+    !question ||
+    question.id !== questionId
+  ) {
+    return;
+  }
+  answer(question.correctSide === "left" ? "right" : "left", "timeout");
+}
+
+function scheduleQuestionTimer(questionId: string, duration: number): void {
+  questionDeadline = performance.now() + duration;
+  questionTimer = window.setTimeout(() => expireQuestion(questionId), duration);
+}
+
+function ensureQuestionTimer(questionId: string): void {
+  if (inputLocked || timedQuestionId === questionId) {
+    return;
+  }
+  clearQuestionTimer();
+  const duration = QUESTION_TIME_MS[activeLesson().difficulty];
+  timedQuestionId = questionId;
+  questionRemainingMs = duration;
+  scheduleQuestionTimer(questionId, duration);
+}
+
+function pauseQuestionTimer(): void {
+  if (questionTimer === null || timedQuestionId === null) {
+    return;
+  }
+  questionRemainingMs = Math.max(0, questionDeadline - performance.now());
+  window.clearTimeout(questionTimer);
+  questionTimer = null;
+}
+
+function resumeQuestionTimer(): void {
+  if (
+    screen !== "run" ||
+    inputLocked ||
+    timedQuestionId === null ||
+    questionTimer !== null
+  ) {
+    return;
+  }
+  const questionId = timedQuestionId;
+  const duration = Math.max(0, questionRemainingMs);
+  scheduleQuestionTimer(questionId, duration);
+}
+
 function answer(side: Side, inputMethod: InputMethod): void {
   const run = state.activeRun;
   if (screen !== "run" || inputLocked || !run) {
@@ -1158,6 +1261,7 @@ function answer(side: Side, inputMethod: InputMethod): void {
   backgroundMusic?.setEnabled(state.soundEnabled);
   backgroundMusic?.start();
   inputLocked = true;
+  clearQuestionTimer();
   const question = run.questions[run.currentIndex];
   if (!question) {
     inputLocked = false;
@@ -1165,7 +1269,11 @@ function answer(side: Side, inputMethod: InputMethod): void {
   }
   const result = answerCurrent(CONTENT_PACK, run, side);
   const timestamp = new Date().toISOString();
-  feedback = { correct: result.correct, conceptId: question.conceptId };
+  feedback = {
+    correct: result.correct,
+    conceptId: question.conceptId,
+    timedOut: inputMethod === "timeout",
+  };
   state = {
     ...state,
     activeRun: result.run,
@@ -1176,23 +1284,25 @@ function answer(side: Side, inputMethod: InputMethod): void {
       timestamp,
     ),
   };
-  appendEvent(
-    "lane_selected",
-    {
-      runId: result.run.id,
-      lessonId: result.run.lessonId,
-      conceptId: question.conceptId,
-      selectedSide: side,
-      inputMethod,
-    },
-  );
+  if (inputMethod !== "timeout") {
+    appendEvent(
+      "lane_selected",
+      {
+        runId: result.run.id,
+        lessonId: result.run.lessonId,
+        conceptId: question.conceptId,
+        selectedSide: side,
+        inputMethod,
+      },
+    );
+  }
   appendEvent(
     "answer_selected",
     {
       runId: result.run.id,
       lessonId: result.run.lessonId,
       conceptId: question.conceptId,
-      selectedSide: side,
+      selectedSide: inputMethod === "timeout" ? null : side,
       correct: result.correct,
       inputMethod,
     },
@@ -1267,7 +1377,9 @@ function exportMetrics(): void {
 function handleAction(action: string): void {
   switch (action) {
     case "quick-run": {
-      const lesson = CONTENT_PACK.lessons[0];
+      const lesson = CONTENT_PACK.lessons.find(
+        (candidate) => candidate.difficulty === selectedDifficulty,
+      );
       if (!lesson) {
         return;
       }
@@ -1501,6 +1613,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("beforeunload", () => {
+  clearQuestionTimer();
   if (canSpeak) {
     window.speechSynthesis.cancel();
   }
@@ -1510,6 +1623,7 @@ window.addEventListener("beforeunload", () => {
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
+    pauseQuestionTimer();
     if (canSpeak) {
       window.speechSynthesis.cancel();
     }
@@ -1519,6 +1633,7 @@ document.addEventListener("visibilitychange", () => {
     return;
   }
   backgroundMusic?.setPageVisible(true);
+  resumeQuestionTimer();
   syncRunnerScene();
 });
 

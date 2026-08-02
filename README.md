@@ -17,12 +17,13 @@ intent, or native-app viability.
 
 - A real-time 3D runner world with perspective, an animated character, moving
   scenery, depth fog, and two physical answer gates.
-- One-tap quick start into the default lesson, plus an optional lesson picker
-  and six-card review flow.
+- Character-led start menu with a front-facing 3D hero, difficulty choice,
+  one-tap play, and an optional lesson picker with six-card review flow.
 - Ukrainian child-facing UI with tap, swipe, and keyboard lane controls.
 - Three open difficulty levels, four lessons per level, and 72 total concepts.
 - Six-card review before the first run for each lesson.
-- Ten-question runs with immediate correction and replay support.
+- Ten-question runs with immediate correction, a visible 10/9/8-second answer
+  window by difficulty, timeout-as-error handling, and replay support.
 - Four local background tracks in a shuffled, fading playlist at 20% volume.
 - A usable CSS fallback when WebGL2 is unavailable.
 - Parent gate with hold-to-open metrics, JSON export, and local reset.
@@ -112,7 +113,8 @@ The adult metrics screen summarizes only browser-local events:
 - `runsStarted` - runs that reached the active gameplay state.
 - `runs` - completed runs.
 - `answers` - selected answers.
-- `laneInputs` - accepted tap, swipe, or keyboard lane selections.
+- `laneInputs` - accepted tap, swipe, or keyboard lane selections. A timeout is
+  an answer event but not a lane input.
 - `correctAnswers` - correct answers within the logged answers.
 - `accuracyPercent` - correct answers divided by answers.
 - `replays` - replay actions after a finished run.

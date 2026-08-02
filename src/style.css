@@ -314,6 +314,39 @@ button:active:not(:disabled) {
   text-align: center;
 }
 
+.welcome-level-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  padding: 5px;
+  border: 1px solid rgb(255 255 255 / 0.22);
+  border-radius: 18px;
+  background: rgb(6 21 45 / 0.72);
+  box-shadow: inset 0 1px rgb(255 255 255 / 0.15);
+}
+
+.welcome-level-button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  min-width: 0;
+  min-height: 45px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 7px 5px;
+  border-radius: 13px;
+  color: var(--muted);
+  background: transparent;
+  font-size: clamp(0.68rem, 2.7vw, 0.82rem);
+  font-weight: 900;
+}
+
+.welcome-level-button.is-active {
+  color: var(--navy-950);
+  background: var(--lime-400);
+  box-shadow: 0 3px 0 rgb(48 76 9 / 0.42);
+}
+
 .primary-button,
 .secondary-button,
 .danger-button,
@@ -684,6 +717,28 @@ button:active:not(:disabled) {
   line-height: 0.94;
   letter-spacing: -0.03em;
   overflow-wrap: anywhere;
+}
+
+.question-timer {
+  height: 5px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.2);
+}
+
+.question-timer i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff805f, var(--lime-400));
+  transform-origin: left center;
+  animation: question-timeout var(--question-time) linear forwards;
+}
+
+.question-timer.is-stopped i {
+  animation-play-state: paused;
 }
 
 .run-hud {
@@ -1442,6 +1497,12 @@ tbody th {
   }
 }
 
+@keyframes question-timeout {
+  to {
+    transform: scaleX(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1450,6 +1511,10 @@ tbody th {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .question-timer i {
+    animation-duration: var(--question-time) !important;
   }
 }
 
@@ -1469,6 +1534,21 @@ tbody th {
   .prompt-cloud {
     top: 0;
     padding-block: 6px 8px;
+  }
+
+
+  .welcome-layout {
+    padding-top: max(16px, calc(env(safe-area-inset-top) + 8px));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .welcome-copy h1 {
+    font-size: clamp(2.65rem, 12vw, 4rem);
+  }
+
+  .welcome-copy p,
+  .privacy-line {
+    font-size: 0.78rem;
   }
 
   .gate-field {

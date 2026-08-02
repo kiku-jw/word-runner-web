@@ -1,5 +1,5 @@
 export type Side = "left" | "right";
-export type InputMethod = "tap" | "swipe" | "keyboard";
+export type InputMethod = "tap" | "swipe" | "keyboard" | "timeout";
 export type QuestionOrigin = "base" | "repeat" | "correction";
 export type Difficulty = 1 | 2 | 3;
 

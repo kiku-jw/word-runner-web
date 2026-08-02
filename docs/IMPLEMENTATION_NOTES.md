@@ -4,7 +4,9 @@ Canonical execution: [GitHub Issue #2](https://github.com/kiku-jw/word-runner-we
 with the soundtrack follow-up tracked in
 [GitHub Issue #3](https://github.com/kiku-jw/word-runner-web/issues/3) and the
 three-level progression tracked in
-[GitHub Issue #4](https://github.com/kiku-jw/word-runner-web/issues/4).
+[GitHub Issue #4](https://github.com/kiku-jw/word-runner-web/issues/4), and the
+start-menu/timeout follow-up tracked in
+[GitHub Issue #5](https://github.com/kiku-jw/word-runner-web/issues/5).
 
 Public demo: [https://kiku-jw.github.io/word-runner-web/](https://kiku-jw.github.io/word-runner-web/).
 
@@ -39,6 +41,19 @@ level without blocking any content.
 The 48 new Medium and Hard concepts remain draft educational copy. Human
 bilingual review is required before supervised child testing or any learning
 claim.
+
+The start menu reuses the same renderer and runner rig as gameplay. Attract mode
+rotates the runner toward the camera and adds a small idle wave; selecting a
+difficulty changes which first lesson the one-tap Play action starts. No menu
+framework or second navigation state store was added.
+
+Each active question uses a browser-native timeout: 10 seconds on Easy, 9 on
+Medium, and 8 on Hard. When it expires, the engine resolves the opposite lane so
+the existing correction animation and spaced-error progress path remain the
+single source of truth. The local `answer_selected` event records
+`inputMethod: timeout`, while no `lane_selected` event is fabricated. The timer
+pauses while the document is hidden and is cleared before answer feedback,
+preventing a stale timeout from affecting the next question.
 
 Concept cards use emoji glyphs, not a per-concept image bundle, and
 pronunciation uses browser speech synthesis when available. Voice selection
