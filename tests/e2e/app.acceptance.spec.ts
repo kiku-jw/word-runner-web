@@ -414,7 +414,9 @@ test("guides a child from lesson review through ten gates to the result screen",
     await answerCurrentQuestion(page);
   }
 
-  await expect(page.getByText("10 правильних")).toBeVisible();
+  await expect(page.locator(".result-score small")).toHaveText(
+    "з 10 правильних",
+  );
   await expect(page.locator(".practised-words span")).toHaveCount(6);
   await expect(page.getByRole("button", { name: "Бігти ще раз" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Інший набір" })).toBeVisible();
