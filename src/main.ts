@@ -533,7 +533,7 @@ function renderGate(
       class="answer-gate gate-${side}${selectedClass}"
       type="button"
       data-side="${side}"
-      aria-label="${escapeHtml(label)}. ${side === "left" ? "Ліві" : "Праві"} ворота"
+      aria-label="${escapeHtml(label)}. ${side === "left" ? "Ліва" : "Права"} стіна"
       ${inputLocked ? "disabled" : ""}
     >
       <span>${escapeHtml(label)}</span>
@@ -593,7 +593,7 @@ function renderRun(): string {
         class="game-stage"
         data-testid="game-stage"
         data-difficulty="${activeLesson().difficulty}"
-        aria-label="Ігрова доріжка. Обери ліві або праві ворота."
+        aria-label="Ігрова доріжка. Обери ліву або праву стіну."
       >
         <div class="prompt-cloud">
           <span>Що це англійською?</span>
@@ -637,8 +637,8 @@ function renderRun(): string {
           run.currentIndex === 0
             ? `<p class="control-hint">${
                 webglFailed
-                  ? "Спрощений режим. Торкнися воріт, свайпни або натисни ← →"
-                  : "Торкнися воріт або свайпни"
+                  ? "Спрощений режим. Торкнися стіни, свайпни або натисни ← →"
+                  : "Торкнися стіни або свайпни"
               }</p>`
             : ""
         }
@@ -844,7 +844,7 @@ function renderMetrics(): string {
         <div class="metrics-copy">
           <h2 id="detail-heading">Що записано</h2>
           <p>
-            Час подій, вибір воріт, правильність, повтори та оцінка. Імен,
+            Час подій, вибір стіни, правильність, повтори та оцінка. Імен,
             контактів, реклами, cookies і віддаленої аналітики немає.
           </p>
           <p>

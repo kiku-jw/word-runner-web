@@ -41,7 +41,7 @@ test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
 });
 
-test("supports tap answers on both left and right gates", async ({ page }) => {
+test("supports tap answers on both left and right walls", async ({ page }) => {
   await gotoApp(page);
   await acceptNotice(page);
   await openLesson(page, "Тварини");
@@ -498,9 +498,13 @@ test("uses a natural Apple voice and adds a gentle mistake reaction", async ({ p
         }
       ).__spokenSamples.length,
   );
-  await page.locator(`[data-side="${wrongSide}"]`).click();
-
-  await expect(page.locator(".feedback-reaction")).toHaveText("О-о!");
+  const mistakeReaction = await page
+    .locator(`[data-side="${wrongSide}"]`)
+    .evaluate((button) => {
+      (button as HTMLButtonElement).click();
+      return document.querySelector(".feedback-reaction")?.textContent?.trim();
+    });
+  expect(mistakeReaction).toBe("О-о!");
   await expect
     .poll(() =>
       page.evaluate(
@@ -544,8 +548,13 @@ test("uses a natural Apple voice and adds a gentle mistake reaction", async ({ p
   if (!nextQuestion) {
     throw new Error("Second run question is missing.");
   }
-  await page.locator(`[data-side="${nextQuestion.correctSide}"]`).click();
-  await expect(page.locator(".feedback-reaction")).toHaveText("Так!");
+  const correctReaction = await page
+    .locator(`[data-side="${nextQuestion.correctSide}"]`)
+    .evaluate((button) => {
+      (button as HTMLButtonElement).click();
+      return document.querySelector(".feedback-reaction")?.textContent?.trim();
+    });
+  expect(correctReaction).toBe("Так!");
   const correctAnswerAudio = await page.evaluate(() => ({
     spoken:
       (

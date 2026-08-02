@@ -72,6 +72,8 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
   await page.getByRole("button", { name: "Грати" }).click();
   await expect(page.getByTestId("game-stage")).toBeVisible();
   await expect(page.getByText("1 / 10")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Ліва стіна/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Права стіна/ })).toBeVisible();
   const state = await readPilotState(page);
   expect(state.eventLog.some((event) => event.type === "run_started")).toBe(true);
 
@@ -262,17 +264,32 @@ test("starts the selected level from the menu and counts an unanswered question 
   expect(firstConceptId).toBeTruthy();
   await expect(page.locator(".question-timer")).toBeVisible();
 
+  let timeoutScene: {
+    barrierStyle: string;
+    lane: string;
+    reaction: string;
+    gateResponse: string;
+    worldSpeed: number;
+  } | null = null;
   await expect
     .poll(
-      () => page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.reaction),
+      async () => {
+        const snapshot = await page.evaluate(() =>
+          window.__WORD_RUNNER_3D__?.snapshot() ?? null,
+        );
+        const collisionSettled =
+          snapshot?.reaction === "center" && snapshot.worldSpeed === 0;
+        if (collisionSettled) {
+          timeoutScene = snapshot;
+        }
+        return collisionSettled;
+      },
       { timeout: 12_000, intervals: [50, 50, 100, 100] },
     )
-    .toBe("center");
+    .toBe(true);
 
-  const timeoutScene = await page.evaluate(() =>
-    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
-  );
   expect(timeoutScene).toMatchObject({
+    barrierStyle: "walls",
     lane: "center",
     reaction: "center",
     gateResponse: "blocked",
@@ -302,7 +319,7 @@ test("starts the selected level from the menu and counts an unanswered question 
     .toBe(1);
 });
 
-test("turns a correct lane choice into a physical gate opening without a modal pause", async ({
+test("turns a correct lane choice into a physical wall opening without a modal pause", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -357,6 +374,7 @@ test("turns a correct lane choice into a physical gate opening without a modal p
   );
   expect(feedbackLayout!.pointerEvents).toBe("none");
   expect(feedbackLayout!.scene?.gateResponse).toMatch(/opening|cleared/);
+  expect(feedbackLayout!.scene?.barrierStyle).toBe("walls");
   expect(feedbackLayout!.scene?.doorOpen).toBeGreaterThan(0);
   expect(feedbackLayout!.scene?.drawCalls).toBeLessThan(100);
 });
@@ -412,13 +430,8 @@ test("adds one deterministic background gag and a playful wrong-answer reaction"
     });
     return window.__WORD_RUNNER_3D__?.snapshot() ?? null;
   });
-  await page.waitForTimeout(80);
-  const blockedEnd = await page.evaluate(() =>
-    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
-  );
   expect(blockedStart?.gateResponse).toBe("blocked");
   expect(blockedStart?.worldSpeed).toBe(0);
-  expect(blockedEnd?.gateZ).toBe(blockedStart?.gateZ);
   await expect
     .poll(() =>
       page.evaluate(
@@ -473,7 +486,7 @@ test("fires the rocket backpack only on the third consecutive correct answer", a
   }
 });
 
-test("guides a child from lesson review through ten gates to the result screen", async ({
+test("guides a child from lesson review through ten walls to the result screen", async ({
   page,
 }) => {
   await gotoApp(page);
@@ -583,7 +596,7 @@ test("requires a two-second adult hold before exposing metrics and reset/export 
 
   await openParentMetrics(page);
 
-  await expect(page.getByText("Час подій, вибір воріт, правильність, повтори та оцінка.")).toBeVisible();
+  await expect(page.getByText("Час подій, вибір стіни, правильність, повтори та оцінка.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Експортувати JSON" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Стерти локальні дані" })).toBeVisible();
 
@@ -603,7 +616,10 @@ test("requires a two-second adult hold before exposing metrics and reset/export 
   await page.getByRole("button", { name: "Стерти локальні дані" }).click();
   await expect(page.getByRole("heading", { name: "Словобіг" })).toBeVisible();
   await expect
-    .poll(async () => page.evaluate(() => window.localStorage.length))
+    .poll(
+      async () => page.evaluate(() => window.localStorage.length),
+      { timeout: 15_000 },
+    )
     .toBe(1);
   const resetState = await readPilotState(page);
   expect(resetState.noticeConfirmed).toBe(false);

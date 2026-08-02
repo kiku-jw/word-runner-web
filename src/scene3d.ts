@@ -78,6 +78,7 @@ export interface RunnerSceneSnapshot extends RunnerPerformanceSample {
   reducedMotion: boolean;
   reaction: RunnerReaction;
   gateResponse: "approaching" | "opening" | "blocked" | "cleared";
+  barrierStyle: "walls";
   doorOpen: number;
   runnerLean: number;
   worldSpeed: number;
@@ -115,12 +116,12 @@ interface GateRig {
   group: Group;
   leftLane: Group;
   rightLane: Group;
-  leftDoor: Mesh;
-  rightDoor: Mesh;
+  leftDoor: Group;
+  rightDoor: Group;
   leftFrame: MeshStandardMaterial;
   rightFrame: MeshStandardMaterial;
-  leftPanel: MeshStandardMaterial;
-  rightPanel: MeshStandardMaterial;
+  leftPanel: MeshBasicMaterial;
+  rightPanel: MeshBasicMaterial;
 }
 
 interface BackgroundGagRig {
@@ -305,62 +306,25 @@ function createRunner(): RunnerRig {
   };
 }
 
-function roundedRect(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-): void {
-  const r = Math.min(radius, width / 2, height / 2);
-  context.beginPath();
-  context.moveTo(x + r, y);
-  context.lineTo(x + width - r, y);
-  context.quadraticCurveTo(x + width, y, x + width, y + r);
-  context.lineTo(x + width, y + height - r);
-  context.quadraticCurveTo(
-    x + width,
-    y + height,
-    x + width - r,
-    y + height,
-  );
-  context.lineTo(x + r, y + height);
-  context.quadraticCurveTo(x, y + height, x, y + height - r);
-  context.lineTo(x, y + r);
-  context.quadraticCurveTo(x, y, x + r, y);
-  context.closePath();
-}
-
-function labelTexture(label: string, color: string): CanvasTexture {
+function labelTexture(label: string): CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 768;
-  canvas.height = 520;
+  canvas.height = 300;
   const context = canvas.getContext("2d");
   if (!context) {
     throw new Error("Canvas 2D context is unavailable.");
   }
 
-  const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, color);
-  gradient.addColorStop(1, "#082c57");
-  roundedRect(context, 14, 14, 740, 492, 42);
-  context.fillStyle = gradient;
-  context.fill();
-  context.lineWidth = 12;
-  context.strokeStyle = "rgba(255,255,255,0.82)";
-  context.stroke();
-
   const normalized = label.toLocaleUpperCase("en-US");
-  const fontSize = normalized.length > 10 ? 92 : normalized.length > 7 ? 114 : 142;
+  const fontSize = normalized.length > 10 ? 110 : normalized.length > 7 ? 142 : 196;
   context.font = `900 ${fontSize}px "Avenir Next Rounded", "Trebuchet MS", sans-serif`;
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.lineWidth = 14;
-  context.strokeStyle = "rgba(3,20,47,0.56)";
-  context.strokeText(normalized, canvas.width / 2, canvas.height / 2 + 8);
+  context.lineWidth = 22;
+  context.strokeStyle = "rgba(3,20,47,0.78)";
+  context.strokeText(normalized, canvas.width / 2, canvas.height / 2 + 4);
   context.fillStyle = "#f8fbff";
-  context.fillText(normalized, canvas.width / 2, canvas.height / 2 + 8);
+  context.fillText(normalized, canvas.width / 2, canvas.height / 2 + 4);
 
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
@@ -371,27 +335,35 @@ function labelTexture(label: string, color: string): CanvasTexture {
 function createGateLane(
   x: number,
   frameMaterial: MeshStandardMaterial,
-  panelMaterial: MeshStandardMaterial,
-): { group: Group; door: Mesh } {
+  wallMaterial: MeshStandardMaterial,
+  panelMaterial: MeshBasicMaterial,
+): { group: Group; door: Group } {
   const lane = new Group();
   lane.position.x = x;
+  const wall = new Group();
+  lane.add(wall);
 
   const frameParts = [
-    new BoxGeometry(0.28, 3.15, 0.45).translate(-1.7, 1.58, 0),
-    new BoxGeometry(0.28, 3.15, 0.45).translate(1.7, 1.58, 0),
-    new BoxGeometry(3.68, 0.38, 0.48).translate(0, 3.12, 0),
+    new BoxGeometry(0.2, 3.2, 0.4).translate(-1.72, 1.6, 0.04),
+    new BoxGeometry(0.2, 3.2, 0.4).translate(1.72, 1.6, 0.04),
+    new BoxGeometry(3.64, 0.2, 0.4).translate(0, 3.1, 0.04),
+    new BoxGeometry(3.64, 0.2, 0.4).translate(0, 0.1, 0.04),
   ];
   const frameGeometry = mergeGeometries(frameParts);
   frameParts.forEach((geometry) => geometry.dispose());
   if (!frameGeometry) {
-    throw new Error("Unable to merge gate frame geometry");
+    throw new Error("Unable to merge wall frame geometry");
   }
-  lane.add(new Mesh(frameGeometry, frameMaterial));
+  wall.add(new Mesh(frameGeometry, frameMaterial));
 
-  const panel = new Mesh(new PlaneGeometry(3.15, 2.15), panelMaterial);
-  panel.position.set(0, 1.48, 0.26);
-  lane.add(panel);
-  return { group: lane, door: panel };
+  const slab = new Mesh(new BoxGeometry(3.36, 2.84, 0.32), wallMaterial);
+  slab.position.set(0, 1.6, 0);
+  wall.add(slab);
+
+  const panel = new Mesh(new PlaneGeometry(3.18, 1.44), panelMaterial);
+  panel.position.set(0, 1.6, 0.22);
+  wall.add(panel);
+  return { group: lane, door: wall };
 }
 
 function createGate(): GateRig {
@@ -412,19 +384,42 @@ function createGate(): GateRig {
     roughness: 0.4,
     metalness: 0.18,
   });
-  const leftPanel = new MeshStandardMaterial({
-    map: labelTexture("LEFT", "#168fe2"),
+  const leftPanel = new MeshBasicMaterial({
+    map: labelTexture("LEFT"),
     transparent: true,
-    roughness: 0.48,
+    depthWrite: false,
+    toneMapped: false,
   });
-  const rightPanel = new MeshStandardMaterial({
-    map: labelTexture("RIGHT", "#e96c4a"),
+  const rightPanel = new MeshBasicMaterial({
+    map: labelTexture("RIGHT"),
     transparent: true,
-    roughness: 0.48,
+    depthWrite: false,
+    toneMapped: false,
   });
 
-  const leftLane = createGateLane(-2.15, leftFrame, leftPanel);
-  const rightLane = createGateLane(2.15, rightFrame, rightPanel);
+  const leftWall = new MeshStandardMaterial({
+    color: 0x168fe2,
+    emissive: 0x06345f,
+    emissiveIntensity: 0.32,
+    transparent: true,
+    opacity: 0.58,
+    depthWrite: false,
+    roughness: 0.2,
+    metalness: 0.05,
+  });
+  const rightWall = new MeshStandardMaterial({
+    color: 0xef584b,
+    emissive: 0x5f1715,
+    emissiveIntensity: 0.3,
+    transparent: true,
+    opacity: 0.58,
+    depthWrite: false,
+    roughness: 0.2,
+    metalness: 0.05,
+  });
+
+  const leftLane = createGateLane(-2.15, leftFrame, leftWall, leftPanel);
+  const rightLane = createGateLane(2.15, rightFrame, rightWall, rightPanel);
   group.add(leftLane.group);
   group.add(rightLane.group);
   return {
@@ -441,12 +436,11 @@ function createGate(): GateRig {
 }
 
 function replacePanelTexture(
-  material: MeshStandardMaterial,
+  material: MeshBasicMaterial,
   label: string,
-  color: string,
 ): void {
   material.map?.dispose();
-  material.map = labelTexture(label, color);
+  material.map = labelTexture(label);
   material.needsUpdate = true;
 }
 
@@ -948,8 +942,8 @@ export function createRunnerScene(
     gate.rightLane.position.y = 0;
     gate.leftLane.rotation.z = 0;
     gate.rightLane.rotation.z = 0;
-    gate.leftDoor.position.set(0, 1.48, 0.26);
-    gate.rightDoor.position.set(0, 1.48, 0.26);
+    gate.leftDoor.position.set(0, 0, 0);
+    gate.rightDoor.position.set(0, 0, 0);
     gate.leftDoor.scale.set(1, 1, 1);
     gate.rightDoor.scale.set(1, 1, 1);
     gate.leftDoor.rotation.set(0, 0, 0);
@@ -991,7 +985,6 @@ export function createRunnerScene(
       selectedDoor.position.x = direction * doorOpen * 1.42;
       selectedDoor.rotation.y = -direction * doorOpen * 0.68;
       selectedDoor.scale.x = Math.max(0.08, 1 - doorOpen * 0.88);
-      (selectedDoor.material as MeshStandardMaterial).opacity = 1 - doorOpen * 0.12;
     } else if (selectedSide !== null && result === "incorrect") {
       const selectedDoor = selectedSide === "left" ? gate.leftDoor : gate.rightDoor;
       selectedDoor.position.z += reactionWave * 0.58;
@@ -1198,8 +1191,8 @@ export function createRunnerScene(
         gateZ = GATE_START_Z;
         gate.group.visible = true;
         gate.group.position.z = gateZ;
-        replacePanelTexture(gate.leftPanel, question.leftLabel, "#168fe2");
-        replacePanelTexture(gate.rightPanel, question.rightLabel, "#e96c4a");
+        replacePanelTexture(gate.leftPanel, question.leftLabel);
+        replacePanelTexture(gate.rightPanel, question.rightLabel);
         setFrameResult();
       }
       if (
@@ -1246,6 +1239,7 @@ export function createRunnerScene(
         ready: !disposed,
         visible,
         questionId,
+        barrierStyle: "walls",
         reaction:
           result !== null && (selectedSide !== null || timedOut)
             ? activeReaction

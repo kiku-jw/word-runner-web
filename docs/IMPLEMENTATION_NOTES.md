@@ -12,7 +12,9 @@ saved-run recovery and the optional review path are tracked in
 grounded world/gate motion follow-up is tracked in
 [GitHub Issue #7](https://github.com/kiku-jw/word-runner-web/issues/7), and the
 center-divider timeout reaction is tracked in
-[GitHub Issue #8](https://github.com/kiku-jw/word-runner-web/issues/8).
+[GitHub Issue #8](https://github.com/kiku-jw/word-runner-web/issues/8), and the
+translucent answer-wall redesign is tracked in
+[GitHub Issue #9](https://github.com/kiku-jw/word-runner-web/issues/9).
 
 Public demo: [https://kiku-jw.github.io/word-runner-web/](https://kiku-jw.github.io/word-runner-web/).
 
@@ -103,13 +105,15 @@ usage analytics and do not prove learning efficacy.
 - Visual density: 4.
 - One cobalt/sky-blue family with a lime success accent.
 - A code-native low-poly Carpathian world with perspective road, water,
-  mountains, trees, depth fog, a moving runner, and physical answer arches.
-- The active answer panels are physical doors: a correct lane opens before the
-  runner reaches it, while a wrong lane stays closed, absorbs the approach, and
-  triggers a gentle recoil. Lateral velocity drives runner lean, and a correct
-  streak modestly increases world speed without adding an economy.
+  mountains, trees, depth fog, a moving runner, and physical answer walls.
+- The active answers are full rectangular translucent blue and red walls with
+  bright rims and floating white labels, matching the original visual reference
+  without importing a model. A correct wall slides aside before the runner
+  reaches it, while a wrong wall stays solid, absorbs the approach, and triggers
+  a gentle recoil. Lateral velocity drives runner lean, and a correct streak
+  modestly increases world speed without adding an economy.
 - Attract mode keeps the track and environment stationary while the front-facing
-  runner waves. During play, gates share the environment's world displacement,
+  runner waves. During play, walls share the environment's world displacement,
   begin farther away, and ease the whole scene to a stop near the decision zone.
   A wrong answer freezes forward motion and the running cycle during recoil;
   the gate no longer accelerates independently into the runner.
