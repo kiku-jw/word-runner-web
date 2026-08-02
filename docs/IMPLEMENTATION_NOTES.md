@@ -10,7 +10,9 @@ start-menu/timeout follow-up tracked in
 saved-run recovery and the optional review path are tracked in
 [GitHub Issue #6](https://github.com/kiku-jw/word-runner-web/issues/6), and the
 grounded world/gate motion follow-up is tracked in
-[GitHub Issue #7](https://github.com/kiku-jw/word-runner-web/issues/7).
+[GitHub Issue #7](https://github.com/kiku-jw/word-runner-web/issues/7), and the
+center-divider timeout reaction is tracked in
+[GitHub Issue #8](https://github.com/kiku-jw/word-runner-web/issues/8).
 
 Public demo: [https://kiku-jw.github.io/word-runner-web/](https://kiku-jw.github.io/word-runner-web/).
 
@@ -62,11 +64,13 @@ feedback without adding a second learning mode or storage contract.
 
 Each active question uses a browser-native timeout: 10 seconds on Easy, 9 on
 Medium, and 8 on Hard. When it expires, the engine resolves the opposite lane so
-the existing correction animation and spaced-error progress path remain the
-single source of truth. The local `answer_selected` event records
-`inputMethod: timeout`, while no `lane_selected` event is fabricated. The timer
-pauses while the document is hidden and is cleared before answer feedback,
-preventing a stale timeout from affecting the next question.
+the existing spaced-error progress path remains the single source of truth, but
+the presentation does not expose that internal lane: the runner stays centered,
+both doors remain unselected, and the scene plays a center-divider collision.
+The local `answer_selected` event records `inputMethod: timeout` and a null
+selected side, while no `lane_selected` event is fabricated. The timer pauses
+while the document is hidden and is cleared before answer feedback, preventing
+a stale timeout from affecting the next question.
 
 Concept cards use emoji glyphs, not a per-concept image bundle, and
 pronunciation uses browser speech synthesis when available. Voice selection

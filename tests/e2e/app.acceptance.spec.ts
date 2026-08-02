@@ -246,7 +246,6 @@ test("starts the selected level from the menu and counts an unanswered question 
 }) => {
   test.slow();
   await gotoApp(page, {
-    disableWebgl: true,
     realQuestionTimeout: true,
   });
 
@@ -264,14 +263,23 @@ test("starts the selected level from the menu and counts an unanswered question 
   await expect(page.locator(".question-timer")).toBeVisible();
 
   await expect
-    .poll(async () => {
-      const current = await readPilotState(page);
-      return current.eventLog.some(
-        (event) =>
-          event.type === "answer_selected" && event.inputMethod === "timeout",
-      );
-    }, { timeout: 12_000 })
-    .toBe(true);
+    .poll(
+      () => page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.reaction),
+      { timeout: 12_000, intervals: [50, 50, 100, 100] },
+    )
+    .toBe("center");
+
+  const timeoutScene = await page.evaluate(() =>
+    window.__WORD_RUNNER_3D__?.snapshot() ?? null,
+  );
+  expect(timeoutScene).toMatchObject({
+    lane: "center",
+    reaction: "center",
+    gateResponse: "blocked",
+    worldSpeed: 0,
+  });
+  await expect(page.locator(".answer-gate.is-selected")).toHaveCount(0);
+  await expect(page.locator(".runner-sprite")).toHaveClass(/lane-center/);
 
   const timedOut = await readPilotState(page);
   expect(

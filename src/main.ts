@@ -576,6 +576,7 @@ function renderRun(): string {
   const concept = conceptById(CONTENT_PACK, question.conceptId);
   const options = optionsForQuestion(CONTENT_PACK, question);
   const selectedSide = question.selectedSide;
+  const visualSelectedSide = feedback?.timedOut ? null : selectedSide;
   const correctStreak = currentCorrectStreak(run);
   ensureQuestionTimer(question.id);
   const remainingMs = Math.max(
@@ -621,11 +622,11 @@ function renderRun(): string {
           <span></span><span></span>
         </div>
         <div class="gate-field" data-testid="gate-field">
-          ${renderGate("left", options.left.target.en, selectedSide)}
-          ${renderGate("right", options.right.target.en, selectedSide)}
+          ${renderGate("left", options.left.target.en, visualSelectedSide)}
+          ${renderGate("right", options.right.target.en, visualSelectedSide)}
         </div>
         <img
-          class="runner-sprite lane-${selectedSide ?? "center"}"
+          class="runner-sprite lane-${visualSelectedSide ?? "center"}"
           src="${asset("runner.webp")}"
           alt=""
           width="1024"
@@ -987,6 +988,7 @@ function syncRunnerScene(): void {
     return;
   }
   const options = optionsForQuestion(CONTENT_PACK, question);
+  const timedOut = feedback?.timedOut === true;
   runnerScene.sync({
     runId: run.id,
     runSeed: run.seed,
@@ -994,7 +996,8 @@ function syncRunnerScene(): void {
     id: question.id,
     leftLabel: options.left.target.en,
     rightLabel: options.right.target.en,
-    selectedSide: question.selectedSide,
+    selectedSide: timedOut ? null : question.selectedSide,
+    timedOut,
     correctSide: question.correctSide,
     correctStreak: currentCorrectStreak(run),
     difficulty: activeLesson().difficulty,

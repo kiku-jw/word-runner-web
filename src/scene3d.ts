@@ -46,6 +46,7 @@ export interface RunnerSceneQuestion {
   leftLabel: string;
   rightLabel: string;
   selectedSide: Side | null;
+  timedOut: boolean;
   correctSide: Side;
   correctStreak: number;
   difficulty: Difficulty;
@@ -58,6 +59,7 @@ export type RunnerReaction =
   | "stumble"
   | "backpack"
   | "gate"
+  | "center"
   | "rocket";
 
 export interface RunnerPerformanceSample {
@@ -774,6 +776,7 @@ export function createRunnerScene(
   let reducedMotion = false;
   let questionId: string | null = null;
   let selectedSide: Side | null = null;
+  let timedOut = false;
   let result: RunnerSceneQuestion["result"] = null;
   let correctSide: Side = "left";
   let activeReaction: RunnerReaction = "none";
@@ -844,7 +847,7 @@ export function createRunnerScene(
     sampleElapsed += delta;
     sampleFrames += 1;
 
-    if (selectedSide !== null && result !== null) {
+    if (result !== null && (selectedSide !== null || timedOut)) {
       pulseAge += delta;
     }
     const reactionProgress = Math.min(1, pulseAge / 0.72);
@@ -888,7 +891,9 @@ export function createRunnerScene(
         ? 0.08
         : 0.3 + Math.min(currentCorrectStreak, 4) * 0.045 + reactionEnergy * 0.08;
 
-    if (selectedSide === null) {
+    if (timedOut && result === "incorrect") {
+      gateResponse = "blocked";
+    } else if (selectedSide === null) {
       gateZ = Math.min(GATE_DECISION_Z, gateZ + worldSpeed * delta);
       gateResponse = "approaching";
     } else if (result === "incorrect") {
@@ -926,6 +931,7 @@ export function createRunnerScene(
     runner.rightLeg.rotation.x = stride * 0.78;
     runner.leftArm.rotation.z = -0.12;
     runner.rightArm.rotation.z = 0.12;
+    runner.group.rotation.x = 0;
     runner.group.rotation.z = runnerLean;
     runner.group.rotation.y = -runnerLean * 0.65;
     runner.group.position.z = 3.4;
@@ -1041,6 +1047,13 @@ export function createRunnerScene(
           (selectedSide === "left" ? -1 : 1);
         runner.leftArm.rotation.z -= reactionWave * 0.2;
         runner.rightArm.rotation.z += reactionWave * 0.2;
+      } else if (activeReaction === "center") {
+        runner.group.position.z -= reactionWave * 0.3;
+        runner.group.rotation.x = -reactionWave * 0.12;
+        runner.leftArm.rotation.z -= reactionWave * 0.42;
+        runner.rightArm.rotation.z += reactionWave * 0.42;
+        gate.leftLane.rotation.z = -reactionWave * 0.035;
+        gate.rightLane.rotation.z = reactionWave * 0.035;
       }
     }
     runner.group.position.y =
@@ -1140,6 +1153,7 @@ export function createRunnerScene(
       attractMode = true;
       questionId = null;
       selectedSide = null;
+      timedOut = false;
       result = null;
       activeReaction = "none";
       gateResponse = "approaching";
@@ -1169,6 +1183,7 @@ export function createRunnerScene(
       if (question.id !== questionId) {
         questionId = question.id;
         selectedSide = null;
+        timedOut = false;
         result = null;
         correctSide = question.correctSide;
         incorrectReaction = incorrectReactionForQuestionId(question.id);
@@ -1187,13 +1202,20 @@ export function createRunnerScene(
         replacePanelTexture(gate.rightPanel, question.rightLabel, "#e96c4a");
         setFrameResult();
       }
-      if (question.selectedSide !== selectedSide) {
+      if (
+        question.selectedSide !== selectedSide ||
+        question.result !== result ||
+        question.timedOut !== timedOut
+      ) {
         selectedSide = question.selectedSide;
+        timedOut = question.timedOut;
         result = question.result;
         correctSide = question.correctSide;
         activeReaction =
-          selectedSide === null || result === null
+          result === null
             ? "none"
+            : timedOut
+              ? "center"
             : result === "incorrect"
               ? incorrectReaction
               : question.correctStreak === 3
@@ -1201,16 +1223,18 @@ export function createRunnerScene(
                 : "correct";
         currentCorrectStreak = question.correctStreak;
         gateResponse =
-          selectedSide === null || result === null
+          result === null
             ? "approaching"
             : result === "incorrect"
               ? "blocked"
               : "opening";
-        targetLaneX = selectedSide === null ? 0 : LANE_X[selectedSide];
+        targetLaneX =
+          timedOut || selectedSide === null ? 0 : LANE_X[selectedSide];
         setFrameResult();
-        if (selectedSide !== null && result !== null) {
+        if (result !== null && (selectedSide !== null || timedOut)) {
           pulseAge = 0;
-          pulse.position.x = LANE_X[selectedSide];
+          pulse.position.x =
+            timedOut || selectedSide === null ? 0 : LANE_X[selectedSide];
           pulse.material.color.setHex(result === "correct" ? 0xb7e63f : 0xef6a5b);
           pulse.visible = !reducedMotion;
         }
@@ -1223,7 +1247,9 @@ export function createRunnerScene(
         visible,
         questionId,
         reaction:
-          selectedSide !== null && result !== null ? activeReaction : "none",
+          result !== null && (selectedSide !== null || timedOut)
+            ? activeReaction
+            : "none",
         gateResponse,
         doorOpen: Math.round(doorOpen * 100) / 100,
         runnerLean: Math.round(runnerLean * 100) / 100,
