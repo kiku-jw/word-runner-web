@@ -1046,8 +1046,8 @@ export function createRunnerScene(
       runner.group.position.z = 3.4;
       runner.group.position.y = 0.04 + (reducedMotion ? 0 : Math.sin(elapsed * 2.2) * 0.025);
       runner.group.rotation.set(0, Math.PI, 0);
-      runner.group.scale.setScalar(0.98);
-      runner.leftArm.rotation.set(0, 0, -2.05 + wave);
+      runner.group.scale.setScalar(0.9);
+      runner.leftArm.rotation.set(0, 0, -2.35 + wave);
       runner.rightArm.rotation.set(0, 0, 0.12);
       runner.leftLeg.rotation.x = 0.04;
       runner.rightLeg.rotation.x = -0.04;
