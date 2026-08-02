@@ -102,13 +102,7 @@ if (state.activeRun?.status === "active") {
 }
 let storageWarning = loaded.warning;
 let storageWriteBlocked = loaded.warning !== null;
-let screen: Screen = contentErrors.length > 0
-  ? "content-error"
-  : state.activeRun?.status === "active"
-      ? "run"
-      : state.activeRun?.status === "complete"
-        ? "result"
-        : "welcome";
+let screen: Screen = contentErrors.length > 0 ? "content-error" : "welcome";
 let screenBeforeParentGate: Screen = state.noticeConfirmed ? "lessons" : "welcome";
 let reviewIndex = 0;
 let feedback: FeedbackState | null = null;
@@ -154,11 +148,6 @@ const sessionId = randomId("session");
 appendEvent("session_started");
 if (recoveredCompletion && state.activeRun) {
   appendEvent("run_completed", {
-    runId: state.activeRun.id,
-    lessonId: state.activeRun.lessonId,
-  });
-} else if (state.activeRun?.status === "active") {
-  appendEvent("session_resumed", {
     runId: state.activeRun.id,
     lessonId: state.activeRun.lessonId,
   });
@@ -293,6 +282,32 @@ function footerNote(): string {
 }
 
 function renderWelcome(): string {
+  const savedRun = state.activeRun;
+  const savedRunAction =
+    savedRun?.status === "active"
+      ? `
+          <button class="primary-button" type="button" data-action="resume-run">
+            Продовжити · ${savedRun.currentIndex + 1}/${savedRun.questions.length}
+          </button>
+        `
+      : savedRun?.status === "complete"
+        ? `
+            <button class="primary-button" type="button" data-action="show-result">
+              Результат · ${savedRun.correctCount}/${savedRun.questions.length}
+            </button>
+          `
+        : "";
+  const playAction = savedRun
+    ? `
+        <button class="secondary-button" type="button" data-action="quick-run">
+          Новий забіг
+        </button>
+      `
+    : `
+        <button class="primary-button" type="button" data-action="quick-run">
+          Грати
+        </button>
+      `;
   return `
     ${sceneStart("scene-welcome")}
       <div class="scene-scrim"></div>
@@ -322,10 +337,9 @@ function renderWelcome(): string {
               `,
             ).join("")}
           </div>
-          <button class="primary-button" type="button" data-action="quick-run">
-            Грати
-          </button>
-          <button class="secondary-button" type="button" data-action="accept-notice">
+          ${savedRunAction}
+          ${playAction}
+          <button class="${savedRun ? "text-button" : "secondary-button"}" type="button" data-action="accept-notice">
             Обрати набір
           </button>
           <button class="text-button" type="button" data-action="open-parent-gate">
@@ -442,7 +456,6 @@ function renderReview(): string {
     throw new Error("Review concept is missing.");
   }
   const concept = conceptById(CONTENT_PACK, conceptId);
-  const alreadyReviewed = state.reviewedLessonIds.includes(lesson.id);
   return `
     ${sceneStart("scene-review")}
       <div class="scene-scrim review-scrim"></div>
@@ -485,11 +498,9 @@ function renderReview(): string {
             }
           </button>
         </div>
-        ${
-          alreadyReviewed
-            ? `<button class="text-button" type="button" data-action="start-run">Одразу бігти</button>`
-            : ""
-        }
+        <button class="text-button" type="button" data-action="start-run">
+          Пропустити слова й одразу бігти
+        </button>
       </section>
       ${warningMarkup()}
     </section>
@@ -1376,6 +1387,32 @@ function exportMetrics(): void {
 
 function handleAction(action: string): void {
   switch (action) {
+    case "resume-run": {
+      const run = state.activeRun;
+      if (!run || run.status !== "active") {
+        return;
+      }
+      appendEvent("session_resumed", {
+        runId: run.id,
+        lessonId: run.lessonId,
+      });
+      persist();
+      lastShownQuestionId = null;
+      feedback = null;
+      inputLocked = false;
+      screen = "run";
+      backgroundMusic?.setEnabled(state.soundEnabled);
+      backgroundMusic?.start();
+      render();
+      break;
+    }
+    case "show-result":
+      if (state.activeRun?.status !== "complete") {
+        return;
+      }
+      screen = "result";
+      render();
+      break;
     case "quick-run": {
       const lesson = CONTENT_PACK.lessons.find(
         (candidate) => candidate.difficulty === selectedDifficulty,

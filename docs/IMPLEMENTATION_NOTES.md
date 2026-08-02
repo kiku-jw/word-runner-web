@@ -6,7 +6,9 @@ with the soundtrack follow-up tracked in
 three-level progression tracked in
 [GitHub Issue #4](https://github.com/kiku-jw/word-runner-web/issues/4), and the
 start-menu/timeout follow-up tracked in
-[GitHub Issue #5](https://github.com/kiku-jw/word-runner-web/issues/5).
+[GitHub Issue #5](https://github.com/kiku-jw/word-runner-web/issues/5). Explicit
+saved-run recovery and the optional review path are tracked in
+[GitHub Issue #6](https://github.com/kiku-jw/word-runner-web/issues/6).
 
 Public demo: [https://kiku-jw.github.io/word-runner-web/](https://kiku-jw.github.io/word-runner-web/).
 
@@ -45,7 +47,16 @@ claim.
 The start menu reuses the same renderer and runner rig as gameplay. Attract mode
 rotates the runner toward the camera and adds a small idle wave; selecting a
 difficulty changes which first lesson the one-tap Play action starts. No menu
-framework or second navigation state store was added.
+framework or second navigation state store was added. Every fresh page load
+opens this menu, even when local storage contains an unfinished run or a result.
+The saved state is preserved and exposed through an explicit Continue or Result
+action; gameplay timers and music do not start until the child chooses to enter
+the run. Starting a new run remains a separate explicit action.
+
+The six-card word review remains available after choosing a lesson, but its
+first card now also offers an immediate skip into gameplay. This supports both
+preview-first children and children who prefer to learn through corrective
+feedback without adding a second learning mode or storage contract.
 
 Each active question uses a browser-native timeout: 10 seconds on Easy, 9 on
 Medium, and 8 on Hard. When it expires, the engine resolves the opposite lane so

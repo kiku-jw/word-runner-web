@@ -17,11 +17,13 @@ intent, or native-app viability.
 
 - A real-time 3D runner world with perspective, an animated character, moving
   scenery, depth fog, and two physical answer gates.
-- Character-led start menu with a front-facing 3D hero, difficulty choice,
-  one-tap play, and an optional lesson picker with six-card review flow.
+- Character-led start menu shown on every visit, with a front-facing 3D hero,
+  difficulty choice, explicit saved-run continuation, one-tap play, and an
+  optional lesson picker.
 - Ukrainian child-facing UI with tap, swipe, and keyboard lane controls.
 - Three open difficulty levels, four lessons per level, and 72 total concepts.
-- Six-card review before the first run for each lesson.
+- Optional six-card review that can be skipped immediately in favour of
+  learning from corrections during the run.
 - Ten-question runs with immediate correction, a visible 10/9/8-second answer
   window by difficulty, timeout-as-error handling, and replay support.
 - Four local background tracks in a shuffled, fading playlist at 20% volume.

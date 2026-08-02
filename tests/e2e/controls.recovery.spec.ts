@@ -237,7 +237,7 @@ test("ignores vertical drags without changing progress or recording an answer", 
 test("continues to the next question after reload during feedback", async ({
   page,
 }) => {
-  await gotoApp(page);
+  await gotoApp(page, { disableWebgl: true });
   await acceptNotice(page);
   await openLesson(page, "Тварини");
   await finishReview(page);
@@ -255,6 +255,11 @@ test("continues to the next question after reload during feedback", async ({
   await page.locator(`[data-side="${currentQuestion.correctSide}"]`).click();
   await page.reload();
 
+  await expect(page.getByRole("heading", { name: "Словобіг" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Продовжити · 2/10" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Продовжити · 2/10" }).click();
   await expect(page.getByTestId("game-stage")).toBeVisible();
   await expect(page.getByText("2 / 10")).toBeVisible();
 
@@ -266,7 +271,7 @@ test("continues to the next question after reload during feedback", async ({
 test("finishes the run after reload during final-question feedback", async ({
   page,
 }) => {
-  await gotoApp(page);
+  await gotoApp(page, { disableWebgl: true });
   await acceptNotice(page);
   await openLesson(page, "Транспорт");
   await finishReview(page);
@@ -298,6 +303,9 @@ test("finishes the run after reload during final-question feedback", async ({
   await page.locator(`[data-side="${finalQuestion.correctSide}"]`).click();
   await page.reload();
 
+  await expect(page.getByRole("heading", { name: "Словобіг" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Забіг завершено" })).toHaveCount(0);
+  await page.getByRole("button", { name: /^Результат · / }).click();
   await expect(page.getByRole("heading", { name: "Забіг завершено" })).toBeVisible();
   const after = await readPilotState(page);
   expect(after.activeRun?.status).toBe("complete");

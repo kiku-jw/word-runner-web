@@ -466,10 +466,27 @@ test("guides a child from lesson review through ten gates to the result screen",
   ).toBe(true);
 });
 
+test("lets a child skip the word review from its first card", async ({ page }) => {
+  await gotoApp(page, { disableWebgl: true });
+  await acceptNotice(page);
+  await openLesson(page, "Тварини");
+
+  await expect(page.getByText("1 / 6")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Пропустити слова й одразу бігти" })
+    .click();
+
+  await expect(page.getByTestId("game-stage")).toBeVisible();
+  await expect(page.getByText("1 / 10")).toBeVisible();
+  const state = await readPilotState(page);
+  expect(state.activeRun?.currentIndex).toBe(0);
+  expect(state.eventLog.some((event) => event.type === "run_started")).toBe(true);
+});
+
 test("restores an in-progress run after reload without losing local progress", async ({
   page,
 }) => {
-  await gotoApp(page);
+  await gotoApp(page, { disableWebgl: true });
   await acceptNotice(page);
   await openLesson(page, "Їжа й напої");
   await finishReview(page);
@@ -480,8 +497,31 @@ test("restores an in-progress run after reload without losing local progress", a
 
   await page.reload();
 
+  await expect(page.getByRole("heading", { name: "Словобіг" })).toBeVisible();
+  await expect(page.getByTestId("game-stage")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Продовжити · 3/10" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Новий забіг" })).toBeVisible();
+
+  const onMenu = await readPilotState(page);
+  expect(onMenu.activeLessonId).toBe(beforeReload.activeLessonId);
+  expect(onMenu.activeRun?.currentIndex).toBe(beforeReload.activeRun?.currentIndex);
+  expect(onMenu.eventLog.some((event) => event.type === "session_resumed")).toBe(false);
+  expect(
+    await page.evaluate(
+      () => window.__WORD_RUNNER_MUSIC__?.snapshot()?.started ?? false,
+    ),
+  ).toBe(false);
+
+  await page.getByRole("button", { name: "Продовжити · 3/10" }).click();
   await expect(page.getByTestId("game-stage")).toBeVisible();
   await expect(page.getByText("3 / 10")).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => window.__WORD_RUNNER_MUSIC__?.snapshot()?.started ?? false,
+    ),
+  ).toBe(true);
 
   const afterReload = await readPilotState(page);
   expect(afterReload.activeLessonId).toBe(beforeReload.activeLessonId);
