@@ -4,6 +4,7 @@ import {
   backgroundGagQuestionIndex,
   baseWorldSpeedForDifficulty,
   cappedPixelRatio,
+  fittedLabelFontSize,
   incorrectReactionForQuestionId,
 } from "./scene3d";
 
@@ -30,6 +31,14 @@ describe("baseWorldSpeedForDifficulty", () => {
     expect(baseWorldSpeedForDifficulty(1, true)).toBe(
       baseWorldSpeedForDifficulty(3, true),
     );
+  });
+});
+
+describe("fittedLabelFontSize", () => {
+  it("keeps short labels large and scales long labels to the texture width", () => {
+    expect(fittedLabelFontSize(450)).toBe(236);
+    expect(fittedLabelFontSize(1_800)).toBe(118);
+    expect(fittedLabelFontSize(10_000)).toBeLessThan(24);
   });
 });
 

@@ -12,6 +12,7 @@ import {
   Fog,
   Group,
   HemisphereLight,
+  LinearFilter,
   MathUtils,
   Mesh,
   MeshBasicMaterial,
@@ -26,17 +27,21 @@ import {
   TorusGeometry,
   WebGLRenderer,
 } from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 import type { Difficulty, Side } from "./types";
 
 const TRACK_SEGMENT_LENGTH = 12;
 const TRACK_SEGMENT_COUNT = 11;
 const TRACK_SPAN = TRACK_SEGMENT_LENGTH * TRACK_SEGMENT_COUNT;
-const LANE_X: Record<Side, number> = { left: -2.15, right: 2.15 };
+const WALL_WIDTH = 3.82;
+const WALL_HEIGHT = 4.6;
+const LANE_X: Record<Side, number> = {
+  left: -WALL_WIDTH / 2,
+  right: WALL_WIDTH / 2,
+};
 const GATE_START_Z = -34;
-const GATE_BRAKE_START_Z = -15;
 const GATE_DECISION_Z = -7.8;
+const QUESTION_SECONDS: Record<Difficulty, number> = { 1: 10, 2: 9, 3: 8 };
 
 export interface RunnerSceneQuestion {
   runId: string;
@@ -79,6 +84,8 @@ export interface RunnerSceneSnapshot extends RunnerPerformanceSample {
   reaction: RunnerReaction;
   gateResponse: "approaching" | "opening" | "blocked" | "cleared";
   barrierStyle: "walls";
+  barrierGap: 0;
+  barrierHeight: number;
   doorOpen: number;
   runnerLean: number;
   worldSpeed: number;
@@ -118,8 +125,8 @@ interface GateRig {
   rightLane: Group;
   leftDoor: Group;
   rightDoor: Group;
-  leftFrame: MeshStandardMaterial;
-  rightFrame: MeshStandardMaterial;
+  leftWall: MeshStandardMaterial;
+  rightWall: MeshStandardMaterial;
   leftPanel: MeshBasicMaterial;
   rightPanel: MeshBasicMaterial;
 }
@@ -157,6 +164,20 @@ export function cappedPixelRatio(
     ? Math.max(1, devicePixelRatio)
     : 1;
   return Math.min(safeRatio, compactViewport ? 1.25 : 1.5);
+}
+
+export function fittedLabelFontSize(
+  measuredWidth: number,
+  maxFontSize = 236,
+  maxTextWidth = 900,
+): number {
+  const safeWidth = Number.isFinite(measuredWidth)
+    ? Math.max(1, measuredWidth)
+    : 1;
+  return Math.max(
+    1,
+    Math.floor(maxFontSize * Math.min(1, maxTextWidth / safeWidth)),
+  );
 }
 
 export function baseWorldSpeedForDifficulty(
@@ -308,33 +329,43 @@ function createRunner(): RunnerRig {
 
 function labelTexture(label: string): CanvasTexture {
   const canvas = document.createElement("canvas");
-  canvas.width = 768;
-  canvas.height = 300;
+  canvas.width = 1024;
+  canvas.height = 384;
   const context = canvas.getContext("2d");
   if (!context) {
     throw new Error("Canvas 2D context is unavailable.");
   }
 
   const normalized = label.toLocaleUpperCase("en-US");
-  const fontSize = normalized.length > 10 ? 110 : normalized.length > 7 ? 142 : 196;
+  const maxFontSize = 236;
+  const maxTextWidth = 900;
+  context.font = `900 ${maxFontSize}px "Avenir Next Rounded", "Trebuchet MS", sans-serif`;
+  const measuredWidth = Math.max(1, context.measureText(normalized).width);
+  const fontSize = fittedLabelFontSize(
+    measuredWidth,
+    maxFontSize,
+    maxTextWidth,
+  );
   context.font = `900 ${fontSize}px "Avenir Next Rounded", "Trebuchet MS", sans-serif`;
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.lineWidth = 22;
+  context.lineWidth = Math.max(12, Math.round(fontSize * 0.11));
   context.strokeStyle = "rgba(3,20,47,0.78)";
-  context.strokeText(normalized, canvas.width / 2, canvas.height / 2 + 4);
+  context.strokeText(normalized, canvas.width / 2, canvas.height / 2 + 5);
   context.fillStyle = "#f8fbff";
-  context.fillText(normalized, canvas.width / 2, canvas.height / 2 + 4);
+  context.fillText(normalized, canvas.width / 2, canvas.height / 2 + 5);
 
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
+  texture.generateMipmaps = false;
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
   texture.needsUpdate = true;
   return texture;
 }
 
 function createGateLane(
   x: number,
-  frameMaterial: MeshStandardMaterial,
   wallMaterial: MeshStandardMaterial,
   panelMaterial: MeshBasicMaterial,
 ): { group: Group; door: Group } {
@@ -343,25 +374,15 @@ function createGateLane(
   const wall = new Group();
   lane.add(wall);
 
-  const frameParts = [
-    new BoxGeometry(0.2, 3.2, 0.4).translate(-1.72, 1.6, 0.04),
-    new BoxGeometry(0.2, 3.2, 0.4).translate(1.72, 1.6, 0.04),
-    new BoxGeometry(3.64, 0.2, 0.4).translate(0, 3.1, 0.04),
-    new BoxGeometry(3.64, 0.2, 0.4).translate(0, 0.1, 0.04),
-  ];
-  const frameGeometry = mergeGeometries(frameParts);
-  frameParts.forEach((geometry) => geometry.dispose());
-  if (!frameGeometry) {
-    throw new Error("Unable to merge wall frame geometry");
-  }
-  wall.add(new Mesh(frameGeometry, frameMaterial));
-
-  const slab = new Mesh(new BoxGeometry(3.36, 2.84, 0.32), wallMaterial);
-  slab.position.set(0, 1.6, 0);
+  const slab = new Mesh(
+    new BoxGeometry(WALL_WIDTH, WALL_HEIGHT, 0.28),
+    wallMaterial,
+  );
+  slab.position.set(0, WALL_HEIGHT / 2, 0);
   wall.add(slab);
 
-  const panel = new Mesh(new PlaneGeometry(3.18, 1.44), panelMaterial);
-  panel.position.set(0, 1.6, 0.22);
+  const panel = new Mesh(new PlaneGeometry(3.5, 1.55), panelMaterial);
+  panel.position.set(0, WALL_HEIGHT / 2, 0.17);
   wall.add(panel);
   return { group: lane, door: wall };
 }
@@ -370,20 +391,6 @@ function createGate(): GateRig {
   const group = new Group();
   group.position.set(0, 0, -25);
 
-  const leftFrame = new MeshStandardMaterial({
-    color: 0x188be1,
-    emissive: 0x073961,
-    emissiveIntensity: 0.45,
-    roughness: 0.38,
-    metalness: 0.22,
-  });
-  const rightFrame = new MeshStandardMaterial({
-    color: 0xee704d,
-    emissive: 0x5f1f16,
-    emissiveIntensity: 0.42,
-    roughness: 0.4,
-    metalness: 0.18,
-  });
   const leftPanel = new MeshBasicMaterial({
     map: labelTexture("LEFT"),
     transparent: true,
@@ -418,8 +425,8 @@ function createGate(): GateRig {
     metalness: 0.05,
   });
 
-  const leftLane = createGateLane(-2.15, leftFrame, leftWall, leftPanel);
-  const rightLane = createGateLane(2.15, rightFrame, rightWall, rightPanel);
+  const leftLane = createGateLane(LANE_X.left, leftWall, leftPanel);
+  const rightLane = createGateLane(LANE_X.right, rightWall, rightPanel);
   group.add(leftLane.group);
   group.add(rightLane.group);
   return {
@@ -428,8 +435,8 @@ function createGate(): GateRig {
     rightLane: rightLane.group,
     leftDoor: leftLane.door,
     rightDoor: rightLane.door,
-    leftFrame,
-    rightFrame,
+    leftWall,
+    rightWall,
     leftPanel,
     rightPanel,
   };
@@ -812,22 +819,38 @@ export function createRunnerScene(
     camera.updateProjectionMatrix();
   }
 
-  function setFrameResult(): void {
-    const idleLeft = 0x188be1;
-    const idleRight = 0xee704d;
+  function setWallResult(): void {
+    const setTint = (
+      material: MeshStandardMaterial,
+      color: number,
+      emissive: number,
+    ): void => {
+      material.color.setHex(color);
+      material.emissive.setHex(emissive);
+    };
+    const idleLeft = [0x168fe2, 0x06345f] as const;
+    const idleRight = [0xef584b, 0x5f1715] as const;
     if (selectedSide === null || result === null) {
-      gate.leftFrame.color.setHex(idleLeft);
-      gate.rightFrame.color.setHex(idleRight);
+      setTint(gate.leftWall, ...idleLeft);
+      setTint(gate.rightWall, ...idleRight);
       return;
     }
-    const success = 0x69b83f;
-    const correction = 0xd94b46;
-    gate.leftFrame.color.setHex(
-      correctSide === "left" ? success : selectedSide === "left" ? correction : idleLeft,
-    );
-    gate.rightFrame.color.setHex(
-      correctSide === "right" ? success : selectedSide === "right" ? correction : idleRight,
-    );
+    const success = [0x69b83f, 0x244d17] as const;
+    const correction = [0xd94b46, 0x5f1715] as const;
+    const leftTint =
+      correctSide === "left"
+        ? success
+        : selectedSide === "left"
+          ? correction
+          : idleLeft;
+    const rightTint =
+      correctSide === "right"
+        ? success
+        : selectedSide === "right"
+          ? correction
+          : idleRight;
+    setTint(gate.leftWall, leftTint[0], leftTint[1]);
+    setTint(gate.rightWall, rightTint[0], rightTint[1]);
   }
 
   function animate(time: number): void {
@@ -852,13 +875,9 @@ export function createRunnerScene(
     const baseWorldSpeed =
       baseWorldSpeedForDifficulty(currentDifficulty, reducedMotion) +
       streakBoost;
-    const approachScale =
-      selectedSide === null && !attractMode
-        ? 1 - MathUtils.smoothstep(gateZ, GATE_BRAKE_START_Z, GATE_DECISION_Z)
-        : 1;
     currentWorldSpeed = attractMode || result === "incorrect"
       ? 0
-      : (baseWorldSpeed + answerBoost) * approachScale;
+      : baseWorldSpeed + answerBoost;
     const worldSpeed = currentWorldSpeed;
     for (const marker of trackMarkers) {
       marker.position.z += worldSpeed * delta;
@@ -886,9 +905,13 @@ export function createRunnerScene(
         : 0.3 + Math.min(currentCorrectStreak, 4) * 0.045 + reactionEnergy * 0.08;
 
     if (timedOut && result === "incorrect") {
+      gateZ = GATE_DECISION_Z;
       gateResponse = "blocked";
     } else if (selectedSide === null) {
-      gateZ = Math.min(GATE_DECISION_Z, gateZ + worldSpeed * delta);
+      const approachSpeed =
+        (GATE_DECISION_Z - GATE_START_Z) /
+        QUESTION_SECONDS[currentDifficulty];
+      gateZ = Math.min(GATE_DECISION_Z, gateZ + approachSpeed * delta);
       gateResponse = "approaching";
     } else if (result === "incorrect") {
       gateResponse = "blocked";
@@ -1193,7 +1216,7 @@ export function createRunnerScene(
         gate.group.position.z = gateZ;
         replacePanelTexture(gate.leftPanel, question.leftLabel);
         replacePanelTexture(gate.rightPanel, question.rightLabel);
-        setFrameResult();
+        setWallResult();
       }
       if (
         question.selectedSide !== selectedSide ||
@@ -1223,7 +1246,7 @@ export function createRunnerScene(
               : "opening";
         targetLaneX =
           timedOut || selectedSide === null ? 0 : LANE_X[selectedSide];
-        setFrameResult();
+        setWallResult();
         if (result !== null && (selectedSide !== null || timedOut)) {
           pulseAge = 0;
           pulse.position.x =
@@ -1240,6 +1263,8 @@ export function createRunnerScene(
         visible,
         questionId,
         barrierStyle: "walls",
+        barrierGap: 0,
+        barrierHeight: WALL_HEIGHT,
         reaction:
           result !== null && (selectedSide !== null || timedOut)
             ? activeReaction

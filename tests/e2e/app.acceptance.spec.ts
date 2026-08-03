@@ -82,6 +82,11 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
   );
   expect(snapshot?.ready).toBe(true);
   expect(snapshot?.view).toBe("run");
+  expect(snapshot).toMatchObject({
+    barrierStyle: "walls",
+    barrierGap: 0,
+    barrierHeight: 4.6,
+  });
   expect(snapshot?.questionId).not.toBeNull();
   expect(snapshot?.drawCalls).toBeLessThan(100);
   expect(snapshot?.pixelRatio).toBeLessThanOrEqual(1.25);
@@ -95,6 +100,7 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
   const gateTravel = (approachEnd?.gateZ ?? 0) - (approachStart?.gateZ ?? 0);
   expect(gateTravel).toBeGreaterThan(0);
   expect(approachEnd?.gateZ).toBeLessThan(-24);
+  expect(approachEnd?.worldSpeed).toBeGreaterThan(0);
 });
 
 test("offers three open levels with separate content and a next-level challenge", async ({
@@ -264,37 +270,29 @@ test("starts the selected level from the menu and counts an unanswered question 
   expect(firstConceptId).toBeTruthy();
   await expect(page.locator(".question-timer")).toBeVisible();
 
-  let timeoutScene: {
-    barrierStyle: string;
-    lane: string;
-    reaction: string;
-    gateResponse: string;
-    worldSpeed: number;
-  } | null = null;
-  await expect
-    .poll(
-      async () => {
-        const snapshot = await page.evaluate(() =>
-          window.__WORD_RUNNER_3D__?.snapshot() ?? null,
-        );
-        const collisionSettled =
-          snapshot?.reaction === "center" && snapshot.worldSpeed === 0;
-        if (collisionSettled) {
-          timeoutScene = snapshot;
-        }
-        return collisionSettled;
-      },
-      { timeout: 12_000, intervals: [50, 50, 100, 100] },
-    )
-    .toBe(true);
-
+  const timeoutHandle = await page.waitForFunction(
+    () => {
+      const snapshot = window.__WORD_RUNNER_3D__?.snapshot() ?? null;
+      return snapshot?.reaction === "center" && snapshot.worldSpeed === 0
+        ? snapshot
+        : false;
+    },
+    undefined,
+    { timeout: 12_000, polling: 50 },
+  );
+  const timeoutScene = await timeoutHandle.jsonValue();
+  if (timeoutScene === false) {
+    throw new Error("Timeout collision snapshot was not captured");
+  }
   expect(timeoutScene).toMatchObject({
     barrierStyle: "walls",
+    barrierGap: 0,
     lane: "center",
     reaction: "center",
     gateResponse: "blocked",
     worldSpeed: 0,
   });
+  expect(timeoutScene?.gateZ).toBeCloseTo(-7.8, 1);
   await expect(page.locator(".answer-gate.is-selected")).toHaveCount(0);
   await expect(page.locator(".runner-sprite")).toHaveClass(/lane-center/);
 
@@ -454,7 +452,6 @@ test("adds one deterministic background gag and a playful wrong-answer reaction"
     )
     .toBe(false);
 });
-
 test("fires the rocket backpack only on the third consecutive correct answer", async ({
   page,
 }) => {

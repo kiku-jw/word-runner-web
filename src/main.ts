@@ -114,6 +114,7 @@ let questionDeadline = 0;
 let questionRemainingMs = 0;
 let parentGateTimer: number | null = null;
 let pointerStart: { x: number; y: number } | null = null;
+let suppressGateClicksUntil = 0;
 let lastShownQuestionId: string | null = null;
 let runnerScene: RunnerSceneController | null = null;
 let webglFailed = false;
@@ -528,6 +529,13 @@ function renderGate(
   selectedSide: Side | null,
 ): string {
   const selectedClass = selectedSide === side ? " is-selected" : "";
+  const labelLength = Array.from(label).length;
+  const lengthClass =
+    labelLength > 12
+      ? " answer-label-compact"
+      : labelLength > 8
+        ? " answer-label-long"
+        : "";
   return `
     <button
       class="answer-gate gate-${side}${selectedClass}"
@@ -536,7 +544,7 @@ function renderGate(
       aria-label="${escapeHtml(label)}. ${side === "left" ? "Ліва" : "Права"} стіна"
       ${inputLocked ? "disabled" : ""}
     >
-      <span>${escapeHtml(label)}</span>
+      <span class="answer-label${lengthClass}">${escapeHtml(label)}</span>
     </button>
   `;
 }
@@ -1558,6 +1566,10 @@ function bindInteractions(): void {
   root.querySelectorAll<HTMLButtonElement>("[data-side]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
+      if (performance.now() < suppressGateClicksUntil) {
+        event.preventDefault();
+        return;
+      }
       const side = button.dataset.side;
       if (side === "left" || side === "right") {
         answer(side, "tap");
@@ -1616,6 +1628,9 @@ function bindInteractions(): void {
       const deltaX = event.clientX - pointerStart.x;
       const deltaY = event.clientY - pointerStart.y;
       pointerStart = null;
+      if (Math.abs(deltaX) > 12 || Math.abs(deltaY) > 12) {
+        suppressGateClicksUntil = performance.now() + 250;
+      }
       if (Math.abs(deltaX) >= 36 && Math.abs(deltaX) > Math.abs(deltaY)) {
         answer(deltaX < 0 ? "left" : "right", "swipe");
         return;
