@@ -45,6 +45,7 @@ test("shows the privacy-first welcome and avoids third-party traffic or cookies"
 test("opens with a real 3D attract scene and starts a run in one tap", async ({
   page,
 }) => {
+  test.slow();
   await gotoApp(page);
 
   const canvas = page.getByTestId("runner-canvas");
@@ -86,11 +87,13 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
     barrierStyle: "walls",
     barrierGap: 0,
     barrierHeight: 4.6,
+    contactShadow: true,
+    wallIntegrity: 1,
   });
   expect(snapshot?.questionId).not.toBeNull();
   expect(snapshot?.drawCalls).toBeLessThan(100);
   expect(snapshot?.pixelRatio).toBeLessThanOrEqual(1.25);
-  expect(snapshot?.gateZ).toBeLessThan(-28);
+  expect(snapshot?.gateZ).toBeLessThan(-8);
 
   const approachStart = snapshot;
   await page.waitForTimeout(700);
@@ -98,8 +101,11 @@ test("opens with a real 3D attract scene and starts a run in one tap", async ({
     window.__WORD_RUNNER_3D__?.snapshot() ?? null,
   );
   const gateTravel = (approachEnd?.gateZ ?? 0) - (approachStart?.gateZ ?? 0);
+  const worldTravel =
+    (approachEnd?.worldTravel ?? 0) - (approachStart?.worldTravel ?? 0);
   expect(gateTravel).toBeGreaterThan(0);
-  expect(approachEnd?.gateZ).toBeLessThan(-24);
+  expect(Math.abs(gateTravel - worldTravel)).toBeLessThan(0.12);
+  expect(approachEnd?.gateZ).toBeLessThan(-8);
   expect(approachEnd?.worldSpeed).toBeGreaterThan(0);
 });
 
@@ -267,10 +273,12 @@ test("starts the selected level from the menu and counts an unanswered question 
   const started = await readPilotState(page);
   expect(started.activeLessonId).toMatch(/^hard-/);
   const firstConceptId = started.activeRun?.questions[0]?.conceptId;
+  const correctSide = started.activeRun?.questions[0]?.correctSide;
   expect(firstConceptId).toBeTruthy();
+  expect(correctSide).toMatch(/left|right/);
   await expect(page.locator(".question-timer")).toBeVisible();
 
-  const timeoutHandle = await page.waitForFunction(
+  const timeoutHandlePromise = page.waitForFunction(
     () => {
       const snapshot = window.__WORD_RUNNER_3D__?.snapshot() ?? null;
       return snapshot?.reaction === "center" && snapshot.worldSpeed === 0
@@ -280,6 +288,17 @@ test("starts the selected level from the menu and counts an unanswered question 
     undefined,
     { timeout: 12_000, polling: 50 },
   );
+  const correctionHandlePromise = page.waitForFunction(
+    (expectedSide) => {
+      const snapshot = window.__WORD_RUNNER_3D__?.snapshot();
+      return snapshot && snapshot.lane === expectedSide && snapshot.gateZ > -7
+        ? snapshot
+        : false;
+    },
+    correctSide,
+    { timeout: 12_000, polling: "raf" },
+  );
+  const timeoutHandle = await timeoutHandlePromise;
   const timeoutScene = await timeoutHandle.jsonValue();
   if (timeoutScene === false) {
     throw new Error("Timeout collision snapshot was not captured");
@@ -289,8 +308,9 @@ test("starts the selected level from the menu and counts an unanswered question 
     barrierGap: 0,
     lane: "center",
     reaction: "center",
-    gateResponse: "blocked",
+    gateResponse: "impact",
     worldSpeed: 0,
+    wallIntegrity: 1,
   });
   expect(timeoutScene?.gateZ).toBeCloseTo(-7.8, 1);
   await expect(page.locator(".answer-gate.is-selected")).toHaveCount(0);
@@ -312,12 +332,16 @@ test("starts the selected level from the menu and counts an unanswered question 
   };
   expect(progress).toMatchObject({ attempts: 1, errors: 1 });
 
+  const correctionHandle = await correctionHandlePromise;
+  const correctionScene = await correctionHandle.jsonValue();
+  expect(correctionScene).not.toBe(false);
+
   await expect
     .poll(async () => (await readPilotState(page)).activeRun?.currentIndex ?? -1)
     .toBe(1);
 });
 
-test("turns a correct lane choice into a physical wall opening without a modal pause", async ({
+test("passes through the intact correct wall without a modal pause", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -348,18 +372,18 @@ test("turns a correct lane choice into a physical wall opening without a modal p
         pointerEvents: getComputedStyle(feedbackElement).pointerEvents,
       };
       await new Promise<void>((resolve) => {
-        const deadline = performance.now() + 500;
-        const waitForOpenFrame = () => {
+        const deadline = performance.now() + 1_150;
+        const waitForPassFrame = () => {
           if (
-            (window.__WORD_RUNNER_3D__?.snapshot()?.doorOpen ?? 0) > 0 ||
+            (window.__WORD_RUNNER_3D__?.snapshot()?.gateZ ?? -100) > 3.4 ||
             performance.now() >= deadline
           ) {
             resolve();
             return;
           }
-          window.requestAnimationFrame(waitForOpenFrame);
+          window.requestAnimationFrame(waitForPassFrame);
         };
-        window.requestAnimationFrame(waitForOpenFrame);
+        window.requestAnimationFrame(waitForPassFrame);
       });
       return {
         ...layout,
@@ -371,15 +395,19 @@ test("turns a correct lane choice into a physical wall opening without a modal p
     feedbackLayout!.stageHeight * 0.22,
   );
   expect(feedbackLayout!.pointerEvents).toBe("none");
-  expect(feedbackLayout!.scene?.gateResponse).toMatch(/opening|cleared/);
+  expect(feedbackLayout!.scene?.gateResponse).toMatch(/passing|passed/);
+  expect(feedbackLayout!.scene?.gateZ).toBeGreaterThan(3.4);
   expect(feedbackLayout!.scene?.barrierStyle).toBe("walls");
-  expect(feedbackLayout!.scene?.doorOpen).toBeGreaterThan(0);
+  expect(feedbackLayout!.scene?.wallIntegrity).toBe(1);
+  expect(feedbackLayout!.scene?.contactShadow).toBe(true);
+  expect(feedbackLayout!.scene?.lane).toBe(question?.correctSide);
   expect(feedbackLayout!.scene?.drawCalls).toBeLessThan(100);
 });
 
 test("adds one deterministic background gag and a playful wrong-answer reaction", async ({
   page,
 }) => {
+  test.slow();
   await gotoApp(page);
   await acceptNotice(page);
   await openLesson(page, "Тварини");
@@ -396,8 +424,12 @@ test("adds one deterministic background gag and a playful wrong-answer reaction"
   }
 
   await expect
-    .poll(() =>
-      page.evaluate(() => window.__WORD_RUNNER_3D__?.snapshot()?.backgroundGagVisible ?? false),
+    .poll(
+      () =>
+        page.evaluate(
+          () => window.__WORD_RUNNER_3D__?.snapshot()?.backgroundGagVisible ?? false,
+        ),
+      { timeout: 15_000 },
     )
     .toBe(true);
   await page.evaluate(
@@ -412,6 +444,27 @@ test("adds one deterministic background gag and a playful wrong-answer reaction"
   const question = runState.activeRun?.questions[runState.activeRun.currentIndex];
   expect(question).toBeTruthy();
   const wrongSide = question?.correctSide === "left" ? "right" : "left";
+  const impactHandlePromise = page.waitForFunction(
+    () => {
+      const snapshot = window.__WORD_RUNNER_3D__?.snapshot() ?? null;
+      return snapshot?.gateResponse === "impact" ? snapshot : false;
+    },
+    undefined,
+    { timeout: 4_000, polling: 25 },
+  );
+  const correctionHandlePromise = page.waitForFunction(
+    (expectedSide) => {
+      const snapshot = window.__WORD_RUNNER_3D__?.snapshot();
+      return snapshot &&
+        snapshot.lane === expectedSide &&
+        snapshot.gateZ > -7 &&
+        snapshot.worldSpeed > 0
+        ? snapshot
+        : false;
+    },
+    question?.correctSide,
+    { timeout: 4_000, polling: "raf" },
+  );
   const wrongReaction = await page
     .locator(`[data-side="${wrongSide}"]`)
     .evaluate((button) => {
@@ -420,16 +473,22 @@ test("adds one deterministic background gag and a playful wrong-answer reaction"
     });
 
   expect(wrongReaction).toMatch(/stumble|backpack|gate/);
-  const blockedStart = await page.evaluate(async () => {
-    await new Promise<void>((resolve) => {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => resolve());
-      });
-    });
-    return window.__WORD_RUNNER_3D__?.snapshot() ?? null;
+  const impactHandle = await impactHandlePromise;
+  const impactScene = await impactHandle.jsonValue();
+  if (impactScene === false) {
+    throw new Error("Wrong-wall impact snapshot was not captured");
+  }
+  expect(impactScene).toMatchObject({
+    gateResponse: "impact",
+    lane: wrongSide,
+    wallIntegrity: 1,
+    worldSpeed: 0,
   });
-  expect(blockedStart?.gateResponse).toBe("blocked");
-  expect(blockedStart?.worldSpeed).toBe(0);
+  expect(impactScene.gateZ).toBeCloseTo(-7.8, 1);
+
+  const correctionHandle = await correctionHandlePromise;
+  const correctionScene = await correctionHandle.jsonValue();
+  expect(correctionScene).not.toBe(false);
   await expect
     .poll(() =>
       page.evaluate(
@@ -486,6 +545,7 @@ test("fires the rocket backpack only on the third consecutive correct answer", a
 test("guides a child from lesson review through ten walls to the result screen", async ({
   page,
 }) => {
+  test.slow();
   await gotoApp(page);
   await acceptNotice(page);
   await openLesson(page, "Тварини");

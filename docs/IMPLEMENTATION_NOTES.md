@@ -16,7 +16,9 @@ center-divider timeout reaction is tracked in
 translucent answer-wall redesign is tracked in
 [GitHub Issue #9](https://github.com/kiku-jw/word-runner-web/issues/9), and the
 continuous-run wall approach is tracked in
-[GitHub Issue #10](https://github.com/kiku-jw/word-runner-web/issues/10).
+[GitHub Issue #10](https://github.com/kiku-jw/word-runner-web/issues/10), and
+world-anchored intact-wall passage is tracked in
+[GitHub Issue #11](https://github.com/kiku-jw/word-runner-web/issues/11).
 
 Public demo: [https://kiku-jw.github.io/word-runner-web/](https://kiku-jw.github.io/word-runner-web/).
 
@@ -110,16 +112,18 @@ usage analytics and do not prove learning efficacy.
   mountains, trees, depth fog, a moving runner, and physical answer walls.
 - The active answers are tall, frameless translucent blue and red walls that
   meet at the center seam. White label textures disable mipmapping and fit their
-  font from measured text width so short and long answers stay legible. A correct
-  wall slides aside before the runner reaches it, while a wrong wall stays solid,
-  absorbs the approach, and triggers a gentle recoil. Lateral velocity drives
-  runner lean, and a correct streak modestly increases world speed without
-  adding an economy.
+  font from measured text width so short and long answers stay legible. A soft
+  road contact shadow identifies the shared bottom edge without adding frames.
+  Both walls remain intact: the runner crosses the correct translucent wall,
+  while a wrong choice absorbs the approach, triggers a gentle recoil, then
+  redirects the runner through the correct wall. Lateral velocity drives runner
+  lean without adding an economy.
 - Attract mode keeps the track and environment stationary while the front-facing
-  runner waves. During play, the environment and running cycle keep moving while
-  unanswered walls approach at a deadline-synchronized rate. Timeout snaps the
-  center seam to the collision plane before recoil; only an actual wrong or
-  timeout impact freezes forward motion during feedback.
+  runner waves. During play, walls, track markers, and trees advance by the same
+  world delta, with the unanswered pace derived from the Easy/Medium/Hard answer
+  deadline. Correct passage accelerates the whole world together. Wrong and
+  timeout impacts briefly freeze the world, then the same shared motion resumes
+  for the corrective passage.
 - Correction is a short, non-modal track overlay. It never dims the scene or
   intercepts input, while the DOM still owns readable word pairing and live
   status semantics.

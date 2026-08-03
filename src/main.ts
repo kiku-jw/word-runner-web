@@ -63,6 +63,8 @@ const QUESTION_TIME_MS: Record<Difficulty, number> = {
   2: 9_000,
   3: 8_000,
 };
+const CORRECT_FEEDBACK_MS = 1_200;
+const CORRECTION_FEEDBACK_MS = 1_850;
 
 const LEVELS: readonly {
   difficulty: Difficulty;
@@ -1009,6 +1011,11 @@ function syncRunnerScene(): void {
     correctSide: question.correctSide,
     correctStreak: currentCorrectStreak(run),
     difficulty: activeLesson().difficulty,
+    questionDurationMs: QUESTION_TIME_MS[activeLesson().difficulty],
+    feedbackDurationMs:
+      feedback?.correct === false
+        ? CORRECTION_FEEDBACK_MS
+        : CORRECT_FEEDBACK_MS,
     result:
       feedback === null
         ? null
@@ -1336,7 +1343,9 @@ function answer(side: Side, inputMethod: InputMethod): void {
   );
   render();
 
-  const feedbackDuration = result.correct ? 760 : 940;
+  const feedbackDuration = result.correct
+    ? CORRECT_FEEDBACK_MS
+    : CORRECTION_FEEDBACK_MS;
   feedbackTimer = window.setTimeout(() => {
     feedbackTimer = null;
     const active = state.activeRun;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  approachSpeedForDuration,
   backgroundGagQuestionIndex,
-  baseWorldSpeedForDifficulty,
   cappedPixelRatio,
   fittedLabelFontSize,
   incorrectReactionForQuestionId,
@@ -20,17 +20,11 @@ describe("cappedPixelRatio", () => {
   });
 });
 
-describe("baseWorldSpeedForDifficulty", () => {
-  it("raises the visual pace by level without changing reduced-motion speed", () => {
-    expect(baseWorldSpeedForDifficulty(1, false)).toBeLessThan(
-      baseWorldSpeedForDifficulty(2, false),
-    );
-    expect(baseWorldSpeedForDifficulty(2, false)).toBeLessThan(
-      baseWorldSpeedForDifficulty(3, false),
-    );
-    expect(baseWorldSpeedForDifficulty(1, true)).toBe(
-      baseWorldSpeedForDifficulty(3, true),
-    );
+describe("approachSpeedForDuration", () => {
+  it("covers the same world distance by each question deadline", () => {
+    expect(approachSpeedForDuration(10_000) * 10).toBeCloseTo(26.2, 5);
+    expect(approachSpeedForDuration(9_000) * 9).toBeCloseTo(26.2, 5);
+    expect(approachSpeedForDuration(8_000) * 8).toBeCloseTo(26.2, 5);
   });
 });
 

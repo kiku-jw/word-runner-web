@@ -9,7 +9,9 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   timeout: 60_000,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : 2,
+  // WebGL contexts contend heavily when multiple headless browsers render the
+  // runner at once; serial execution matches the single-phone product surface.
+  workers: 1,
   reporter: process.env.CI
     ? [["line"], ["html", { outputFolder: "tmp/playwright-report", open: "never" }]]
     : "line",
@@ -17,7 +19,9 @@ export default defineConfig({
     baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    // Recording every local WebGL frame forces GPU readbacks and can reduce the
+    // runner to a frame per second. CI still records the first retry for diagnosis.
+    video: process.env.CI ? "on-first-retry" : "off",
   },
   projects: [
     {

@@ -41,7 +41,9 @@ const LANE_X: Record<Side, number> = {
 };
 const GATE_START_Z = -34;
 const GATE_DECISION_Z = -7.8;
-const QUESTION_SECONDS: Record<Difficulty, number> = { 1: 10, 2: 9, 3: 8 };
+const GATE_PASS_Z = 5.4;
+const WRONG_APPROACH_SECONDS = 0.5;
+const WRONG_IMPACT_SECONDS = 0.45;
 
 export interface RunnerSceneQuestion {
   runId: string;
@@ -55,6 +57,8 @@ export interface RunnerSceneQuestion {
   correctSide: Side;
   correctStreak: number;
   difficulty: Difficulty;
+  questionDurationMs: number;
+  feedbackDurationMs: number;
   result: "correct" | "incorrect" | null;
 }
 
@@ -82,13 +86,15 @@ export interface RunnerSceneSnapshot extends RunnerPerformanceSample {
   frameCount: number;
   reducedMotion: boolean;
   reaction: RunnerReaction;
-  gateResponse: "approaching" | "opening" | "blocked" | "cleared";
+  gateResponse: "approaching" | "impact" | "passing" | "passed";
   barrierStyle: "walls";
   barrierGap: 0;
   barrierHeight: number;
-  doorOpen: number;
+  contactShadow: true;
+  wallIntegrity: 1;
   runnerLean: number;
   worldSpeed: number;
+  worldTravel: number;
   backgroundGagVisible: boolean;
   backgroundGagQuestionIndex: number;
   difficulty: Difficulty;
@@ -123,8 +129,8 @@ interface GateRig {
   group: Group;
   leftLane: Group;
   rightLane: Group;
-  leftDoor: Group;
-  rightDoor: Group;
+  leftBarrier: Group;
+  rightBarrier: Group;
   leftWall: MeshStandardMaterial;
   rightWall: MeshStandardMaterial;
   leftPanel: MeshBasicMaterial;
@@ -180,11 +186,11 @@ export function fittedLabelFontSize(
   );
 }
 
-export function baseWorldSpeedForDifficulty(
-  difficulty: Difficulty,
-  reducedMotion: boolean,
+export function approachSpeedForDuration(
+  durationMs: number,
 ): number {
-  return reducedMotion ? 3.2 : 8.8 + (difficulty - 1) * 0.8;
+  const safeSeconds = Math.max(0.1, durationMs / 1_000);
+  return (GATE_DECISION_Z - GATE_START_Z) / safeSeconds;
 }
 
 function createLimb(
@@ -368,7 +374,7 @@ function createGateLane(
   x: number,
   wallMaterial: MeshStandardMaterial,
   panelMaterial: MeshBasicMaterial,
-): { group: Group; door: Group } {
+): { group: Group; barrier: Group } {
   const lane = new Group();
   lane.position.x = x;
   const wall = new Group();
@@ -384,7 +390,7 @@ function createGateLane(
   const panel = new Mesh(new PlaneGeometry(3.5, 1.55), panelMaterial);
   panel.position.set(0, WALL_HEIGHT / 2, 0.17);
   wall.add(panel);
-  return { group: lane, door: wall };
+  return { group: lane, barrier: wall };
 }
 
 function createGate(): GateRig {
@@ -427,14 +433,27 @@ function createGate(): GateRig {
 
   const leftLane = createGateLane(LANE_X.left, leftWall, leftPanel);
   const rightLane = createGateLane(LANE_X.right, rightWall, rightPanel);
+  const contactShadow = new Mesh(
+    new PlaneGeometry(WALL_WIDTH * 1.96, 0.92),
+    new MeshBasicMaterial({
+      color: 0x16344a,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  contactShadow.rotation.x = -Math.PI / 2;
+  contactShadow.position.set(0, 0.018, 0.18);
   group.add(leftLane.group);
   group.add(rightLane.group);
+  group.add(contactShadow);
   return {
     group,
     leftLane: leftLane.group,
     rightLane: rightLane.group,
-    leftDoor: leftLane.door,
-    rightDoor: rightLane.door,
+    leftBarrier: leftLane.barrier,
+    rightBarrier: rightLane.barrier,
     leftWall,
     rightWall,
     leftPanel,
@@ -561,7 +580,7 @@ function addEnvironment(scene: Scene): Group[] {
     scene.add(mountain);
   }
 
-  const trees = Array.from({ length: 20 }, (_, index) => createTree(index));
+  const trees = Array.from({ length: 19 }, (_, index) => createTree(index));
   for (const tree of trees) {
     scene.add(tree);
   }
@@ -788,11 +807,14 @@ export function createRunnerScene(
   let targetLaneX = 0;
   let runnerLean = 0;
   let gateZ = GATE_START_Z;
+  let resultStartGateZ = GATE_START_Z;
   let gateResponse: RunnerSceneSnapshot["gateResponse"] = "approaching";
-  let doorOpen = 0;
   let currentCorrectStreak = 0;
   let currentDifficulty: Difficulty = 1;
-  let currentWorldSpeed = 8.8;
+  let currentQuestionDurationMs = 10_000;
+  let currentFeedbackDurationMs = 1_200;
+  let currentWorldSpeed = approachSpeedForDuration(currentQuestionDurationMs);
+  let worldTravel = 0;
   let lastTime = 0;
   let elapsed = 0;
   let frameCount = 0;
@@ -857,36 +879,61 @@ export function createRunnerScene(
     if (!visible || disposed) {
       return;
     }
-    const delta = lastTime === 0 ? 1 / 60 : Math.min(0.05, (time - lastTime) / 1000);
+    const delta = lastTime === 0 ? 1 / 60 : Math.min(0.5, (time - lastTime) / 1000);
     lastTime = time;
     elapsed += delta;
     frameCount += 1;
     sampleElapsed += delta;
     sampleFrames += 1;
 
-    if (result !== null && (selectedSide !== null || timedOut)) {
-      pulseAge += delta;
-    }
-    const reactionProgress = Math.min(1, pulseAge / 0.72);
+    const wrongImpactAt = timedOut ? 0 : WRONG_APPROACH_SECONDS;
+    const correctionPassAt = wrongImpactAt + WRONG_IMPACT_SECONDS;
+    const reactionAge =
+      result === "incorrect" ? Math.max(0, pulseAge - wrongImpactAt) : pulseAge;
+    const reactionProgress = Math.min(1, reactionAge / 0.72);
     const reactionWave = reducedMotion ? 0 : Math.sin(reactionProgress * Math.PI);
     const reactionEnergy = Math.max(0, 1 - reactionProgress);
-    const streakBoost = reducedMotion ? 0 : Math.min(currentCorrectStreak, 4) * 0.48;
-    const answerBoost = result === "correct" ? reactionEnergy * 2.4 : 0;
-    const baseWorldSpeed =
-      baseWorldSpeedForDifficulty(currentDifficulty, reducedMotion) +
-      streakBoost;
-    currentWorldSpeed = attractMode || result === "incorrect"
+    const approachSpeed = approachSpeedForDuration(currentQuestionDurationMs);
+    const feedbackSeconds = Math.max(0.2, currentFeedbackDurationMs / 1_000);
+    const correctPassSeconds = Math.max(0.2, feedbackSeconds * 0.65);
+    const correctPassSpeed = Math.max(
+      approachSpeed,
+      (GATE_PASS_Z - resultStartGateZ) / correctPassSeconds,
+    );
+    const correctionPassSeconds = Math.max(
+      0.2,
+      (feedbackSeconds - correctionPassAt) * 0.65,
+    );
+    const correctionPassSpeed =
+      (GATE_PASS_Z - GATE_DECISION_Z) / correctionPassSeconds;
+    const wrongApproachSpeed = timedOut
       ? 0
-      : baseWorldSpeed + answerBoost;
+      : Math.max(
+          approachSpeed,
+          (GATE_DECISION_Z - resultStartGateZ) / WRONG_APPROACH_SECONDS,
+        );
+    currentWorldSpeed = attractMode
+      ? 0
+      : result === null
+        ? approachSpeed
+        : result === "correct"
+          ? correctPassSpeed
+          : pulseAge < wrongImpactAt
+            ? wrongApproachSpeed
+            : pulseAge < correctionPassAt
+              ? 0
+              : correctionPassSpeed;
     const worldSpeed = currentWorldSpeed;
+    const worldDelta = worldSpeed * delta;
+    worldTravel += worldDelta;
     for (const marker of trackMarkers) {
-      marker.position.z += worldSpeed * delta;
+      marker.position.z += worldDelta;
       if (marker.position.z > 16) {
         marker.position.z -= TRACK_SPAN;
       }
     }
     for (const tree of trees) {
-      tree.position.z += worldSpeed * delta;
+      tree.position.z += worldDelta;
       if (tree.position.z > 18) {
         tree.position.z -= 116;
       }
@@ -904,22 +951,27 @@ export function createRunnerScene(
         ? 0.08
         : 0.3 + Math.min(currentCorrectStreak, 4) * 0.045 + reactionEnergy * 0.08;
 
-    if (timedOut && result === "incorrect") {
-      gateZ = GATE_DECISION_Z;
-      gateResponse = "blocked";
-    } else if (selectedSide === null) {
-      const approachSpeed =
-        (GATE_DECISION_Z - GATE_START_Z) /
-        QUESTION_SECONDS[currentDifficulty];
-      gateZ = Math.min(GATE_DECISION_Z, gateZ + approachSpeed * delta);
+    if (result === null) {
+      gateZ = Math.min(GATE_DECISION_Z, gateZ + worldDelta);
       gateResponse = "approaching";
-    } else if (result === "incorrect") {
-      gateResponse = "blocked";
+    } else if (result === "correct") {
+      gateZ += worldDelta;
+      gateResponse = gateZ >= GATE_PASS_Z ? "passed" : "passing";
+    } else if (pulseAge < wrongImpactAt) {
+      gateZ = Math.min(GATE_DECISION_Z, gateZ + worldDelta);
+      gateResponse = "approaching";
+    } else if (pulseAge < correctionPassAt) {
+      gateZ = GATE_DECISION_Z;
+      gateResponse = "impact";
     } else {
-      gateZ += worldSpeed * delta;
-      gateResponse = reactionProgress < 1 ? "opening" : "cleared";
+      gateZ += worldDelta;
+      gateResponse = gateZ >= GATE_PASS_Z ? "passed" : "passing";
     }
     gate.group.position.z = gateZ;
+
+    if (result === "incorrect" && pulseAge >= correctionPassAt) {
+      targetLaneX = LANE_X[correctSide];
+    }
 
     const previousRunnerX = runner.group.position.x;
     runner.group.position.x = MathUtils.damp(
@@ -940,7 +992,7 @@ export function createRunnerScene(
     const stridePhase = elapsed * strideRate;
     const runningEffort = attractMode
       ? 0
-      : MathUtils.clamp(worldSpeed / Math.max(1, baseWorldSpeed), 0, 1.25);
+      : MathUtils.clamp(worldSpeed / Math.max(1, approachSpeed), 0, 1.25);
     const stride = (reducedMotion ? 0.08 : Math.sin(stridePhase) * 0.78) * runningEffort;
     runner.leftArm.rotation.x = stride;
     runner.rightArm.rotation.x = -stride;
@@ -965,12 +1017,12 @@ export function createRunnerScene(
     gate.rightLane.position.y = 0;
     gate.leftLane.rotation.z = 0;
     gate.rightLane.rotation.z = 0;
-    gate.leftDoor.position.set(0, 0, 0);
-    gate.rightDoor.position.set(0, 0, 0);
-    gate.leftDoor.scale.set(1, 1, 1);
-    gate.rightDoor.scale.set(1, 1, 1);
-    gate.leftDoor.rotation.set(0, 0, 0);
-    gate.rightDoor.rotation.set(0, 0, 0);
+    gate.leftBarrier.position.set(0, 0, 0);
+    gate.rightBarrier.position.set(0, 0, 0);
+    gate.leftBarrier.scale.set(1, 1, 1);
+    gate.rightBarrier.scale.set(1, 1, 1);
+    gate.leftBarrier.rotation.set(0, 0, 0);
+    gate.rightBarrier.rotation.set(0, 0, 0);
     gate.leftPanel.opacity = 1;
     gate.rightPanel.opacity = 1;
 
@@ -1000,19 +1052,16 @@ export function createRunnerScene(
       backgroundGag.group.visible = false;
     }
 
-    doorOpen = 0;
-    if (selectedSide !== null && result === "correct") {
-      doorOpen = MathUtils.smoothstep(reactionProgress, 0.05, 0.72);
-      const selectedDoor = selectedSide === "left" ? gate.leftDoor : gate.rightDoor;
-      const direction = selectedSide === "left" ? -1 : 1;
-      selectedDoor.position.x = direction * doorOpen * 1.42;
-      selectedDoor.rotation.y = -direction * doorOpen * 0.68;
-      selectedDoor.scale.x = Math.max(0.08, 1 - doorOpen * 0.88);
-    } else if (selectedSide !== null && result === "incorrect") {
-      const selectedDoor = selectedSide === "left" ? gate.leftDoor : gate.rightDoor;
-      selectedDoor.position.z += reactionWave * 0.58;
-      selectedDoor.scale.setScalar(1 + reactionWave * 0.045);
-      selectedDoor.rotation.z =
+    if (
+      selectedSide !== null &&
+      result === "incorrect" &&
+      gateResponse === "impact"
+    ) {
+      const selectedBarrier =
+        selectedSide === "left" ? gate.leftBarrier : gate.rightBarrier;
+      selectedBarrier.position.z += reactionWave * 0.58;
+      selectedBarrier.scale.setScalar(1 + reactionWave * 0.045);
+      selectedBarrier.rotation.z =
         Math.sin(reactionProgress * Math.PI * 5) * (1 - reactionProgress) * 0.055;
     }
     let reactionY = 0;
@@ -1036,7 +1085,11 @@ export function createRunnerScene(
           reducedMotion ? 1.35 : 0.82 + reactionWave * 0.95,
         );
       }
-    } else if (result === "incorrect" && reactionProgress < 1) {
+    } else if (
+      result === "incorrect" &&
+      gateResponse === "impact" &&
+      reactionProgress < 1
+    ) {
       reactionY = -reactionWave * 0.08;
       if (activeReaction === "stumble") {
         runner.group.rotation.z =
@@ -1077,8 +1130,11 @@ export function createRunnerScene(
       (reducedMotion ? 0 : Math.abs(Math.sin(stridePhase)) * 0.075 * runningEffort) +
       reactionY;
 
-    const wrongShake = result === "incorrect" && selectedSide !== null && !reducedMotion
-      ? Math.sin(elapsed * 58) * Math.max(0, 1 - pulseAge / 0.55) * 0.13
+    const wrongShake = result === "incorrect" &&
+      gateResponse === "impact" &&
+      selectedSide !== null &&
+      !reducedMotion
+      ? Math.sin(elapsed * 58) * Math.max(0, 1 - reactionAge / 0.55) * 0.13
       : 0;
     const correctPunch = result === "correct" && !reducedMotion ? reactionWave : 0;
     if (attractMode) {
@@ -1105,7 +1161,7 @@ export function createRunnerScene(
       ? 44
       : reducedMotion
         ? 53
-        : 53 + Math.max(0, worldSpeed - 8.8) * 0.72;
+        : 53 + Math.min(10, Math.max(0, worldSpeed - 8.8) * 0.72);
     const nextFov = MathUtils.damp(camera.fov, targetFov, 8, delta);
     if (Math.abs(nextFov - camera.fov) > 0.005) {
       camera.fov = nextFov;
@@ -1127,6 +1183,13 @@ export function createRunnerScene(
     }
 
     renderer.render(scene, camera);
+
+    // Keep every result phase observable for at least one rendered frame.
+    // This matters on throttled phones where a single frame can span a large
+    // part of the short impact beat.
+    if (result !== null && (selectedSide !== null || timedOut)) {
+      pulseAge += delta;
+    }
 
     if (sampleElapsed >= 4) {
       measuredFps = Math.round(sampleFrames / sampleElapsed);
@@ -1173,9 +1236,10 @@ export function createRunnerScene(
       result = null;
       activeReaction = "none";
       gateResponse = "approaching";
-      doorOpen = 0;
       currentCorrectStreak = 0;
       currentDifficulty = 1;
+      currentQuestionDurationMs = 10_000;
+      currentFeedbackDurationMs = 1_200;
       backgroundGagActive = false;
       targetLaneX = 0;
       gate.group.visible = false;
@@ -1186,6 +1250,8 @@ export function createRunnerScene(
     sync(question) {
       attractMode = false;
       currentDifficulty = question.difficulty;
+      currentQuestionDurationMs = question.questionDurationMs;
+      currentFeedbackDurationMs = question.feedbackDurationMs;
       if (question.runId !== performanceRunId) {
         performanceRunId = question.runId;
         scheduledBackgroundGagQuestionIndex = backgroundGagQuestionIndex(
@@ -1205,13 +1271,14 @@ export function createRunnerScene(
         incorrectReaction = incorrectReactionForQuestionId(question.id);
         activeReaction = "none";
         gateResponse = "approaching";
-        doorOpen = 0;
         currentCorrectStreak = question.correctStreak;
         backgroundGagActive =
           question.questionIndex === scheduledBackgroundGagQuestionIndex;
         backgroundGagAge = 0;
         targetLaneX = 0;
         gateZ = GATE_START_Z;
+        resultStartGateZ = GATE_START_Z;
+        worldTravel = 0;
         gate.group.visible = true;
         gate.group.position.z = gateZ;
         replacePanelTexture(gate.leftPanel, question.leftLabel);
@@ -1227,6 +1294,10 @@ export function createRunnerScene(
         timedOut = question.timedOut;
         result = question.result;
         correctSide = question.correctSide;
+        if (timedOut && result === "incorrect") {
+          gateZ = GATE_DECISION_Z;
+        }
+        resultStartGateZ = gateZ;
         activeReaction =
           result === null
             ? "none"
@@ -1242,8 +1313,10 @@ export function createRunnerScene(
           result === null
             ? "approaching"
             : result === "incorrect"
-              ? "blocked"
-              : "opening";
+              ? timedOut
+                ? "impact"
+                : "approaching"
+              : "passing";
         targetLaneX =
           timedOut || selectedSide === null ? 0 : LANE_X[selectedSide];
         setWallResult();
@@ -1265,14 +1338,16 @@ export function createRunnerScene(
         barrierStyle: "walls",
         barrierGap: 0,
         barrierHeight: WALL_HEIGHT,
+        contactShadow: true,
+        wallIntegrity: 1,
         reaction:
           result !== null && (selectedSide !== null || timedOut)
             ? activeReaction
             : "none",
         gateResponse,
-        doorOpen: Math.round(doorOpen * 100) / 100,
         runnerLean: Math.round(runnerLean * 100) / 100,
         worldSpeed: Math.round(currentWorldSpeed * 10) / 10,
+        worldTravel: Math.round(worldTravel * 100) / 100,
         backgroundGagVisible: backgroundGagActive,
         backgroundGagQuestionIndex: scheduledBackgroundGagQuestionIndex,
         difficulty: currentDifficulty,
